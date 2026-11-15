@@ -2,11 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="ahrefs-site-verification"
-      content="38f091146e9739ea28ca6ea0cfd077cfd3387a798283fd07c83e902c20c15379"
-    />
-    <link rel="icon" href="/favicon-v3.png" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no"
@@ -26,48 +23,34 @@
       name="apple-mobile-web-app-status-bar-style"
       content="black-translucent"
     />
-    <link rel="apple-touch-icon" href="/og-logo-v3.png" />
+    <meta name="application-name" content="Hypercast" />
+    <meta name="apple-mobile-web-app-title" content="Hypercast" />
+    <meta
+      name="description"
+      content="Hypercast is an independent social client powered by Hypersnap."
+    />
+    <meta property="og:site_name" content="Hypercast" />
+    <meta property="og:title" content="Hypercast" />
+    <meta
+      property="og:description"
+      content="An independent social client powered by Hypersnap."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Farcaster</title>
-    <!-- Preconnect to image CDN for faster LCP -->
-    <link rel="preconnect" href="https://wrpcd.net" crossorigin />
+    <title>Hypercast</title>
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
-      media="print"
-      onload="this.media='all'"
     />
-    <script>
-      (function() {
-        const STORAGE_KEY = 'user-saved-theme';
-        const DEFAULT_THEME = 'system';
-        
-        try {
-          const stored = localStorage.getItem(STORAGE_KEY);
-          const userSavedTheme = stored || DEFAULT_THEME;
-          
-          let effective = userSavedTheme;
-          if (userSavedTheme === 'system') {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            effective = prefersDark ? 'dark' : 'light';
-          }
-          
-          const root = document.documentElement;
-          root.classList.toggle('dark', effective === 'dark');
-          root.classList.toggle('light', effective === 'light');
-          root.setAttribute('data-theme', userSavedTheme);
-        } catch (e) {
-          // Fallback if localStorage is unavailable
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          const root = document.documentElement;
-          root.classList.toggle('dark', prefersDark);
-          root.classList.toggle('light', !prefersDark);
-        }
-      })();
-    </script>
+    <!-- Applies the saved theme before first paint. External so the page needs no inline script. -->
+    <script src="/theme-init.js"></script>
     <style>
       html.dark {
         background-color: #101010;
@@ -88,6 +71,6 @@
     <div id="modal-root"></div>
     <div id="popover-root"></div>
     <div id="hover-popover-root"></div>
-    <script type="module" src="/src/index.jsx"></script>
+    <script type="module" src="/src/hypercast/main.tsx"></script>
   </body>
 </html>
