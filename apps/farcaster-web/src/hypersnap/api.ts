@@ -3,7 +3,11 @@
  */
 import { HypersnapError, isNotFound } from '~/hypersnap/errors';
 import type { RequestOptions, Transport } from '~/hypersnap/http';
-import { normalizeHash, normalizeHashPrefix, stripHexPrefix } from '~/hypersnap/ids';
+import {
+  normalizeHash,
+  normalizeHashPrefix,
+  stripHexPrefix,
+} from '~/hypersnap/ids';
 import {
   decodeCastEnvelope,
   decodeCastsPage,
@@ -72,25 +76,48 @@ function createApi(transport: Transport) {
   return {
     // --- feeds ---
 
-    async getTrendingFeed(params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getTrendingFeed(
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
         await get(`${BASE}/feed/trending`, pageQuery(params), options),
       );
     },
 
-    async getFollowingFeed(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getFollowingFeed(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
-        await get(`${BASE}/feed/following`, { fid, ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/feed/following`,
+          { fid, ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
-    async getUserCasts(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getUserCasts(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
-        await get(`${BASE}/feed/user/casts`, { fid, ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/feed/user/casts`,
+          { fid, ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
-    async getUserReplies(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getUserReplies(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
         await get(
           `${BASE}/feed/user/replies_and_recasts`,
@@ -100,7 +127,11 @@ function createApi(transport: Transport) {
       );
     },
 
-    async getChannelFeed(channelId: string, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getChannelFeed(
+      channelId: string,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
         await get(
           `${BASE}/feed/channels`,
@@ -112,7 +143,11 @@ function createApi(transport: Transport) {
 
     // --- casts ---
 
-    async getCast(hash: string, params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<Cast> {
+    async getCast(
+      hash: string,
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<Cast> {
       return decodeCastEnvelope(
         await get(
           `${BASE}/cast`,
@@ -127,7 +162,11 @@ function createApi(transport: Transport) {
     },
 
     /** One request for up to 100 casts; unknown hashes are simply absent. */
-    async getCastsByHashes(hashes: CastHash[], params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<Cast[]> {
+    async getCastsByHashes(
+      hashes: CastHash[],
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<Cast[]> {
       const unique = [...new Set(hashes)].slice(0, MAX_PAGE_SIZE);
       if (unique.length === 0) {
         return [];
@@ -145,7 +184,11 @@ function createApi(transport: Transport) {
       return page.items;
     },
 
-    async getConversation(hash: string, params: { replyDepth?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<ConversationNode> {
+    async getConversation(
+      hash: string,
+      params: { replyDepth?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<ConversationNode> {
       return decodeConversation(
         await get(
           `${BASE}/cast/conversation`,
@@ -160,7 +203,11 @@ function createApi(transport: Transport) {
       );
     },
 
-    async getQuotes(hash: string, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async getQuotes(
+      hash: string,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
         await get(
           `${BASE}/cast/quotes`,
@@ -179,25 +226,40 @@ function createApi(transport: Transport) {
      * look up. Scan the author's most recent casts for a match instead, and
      * give up after `maxPages` rather than walking an entire history.
      */
-    async findCastByHashPrefix(authorFid: Fid, prefix: string, params: { maxPages?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<Cast | null> {
+    async findCastByHashPrefix(
+      authorFid: Fid,
+      prefix: string,
+      params: { maxPages?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<Cast | null> {
       const normalized = normalizeHashPrefix(prefix);
       if (normalized === null) {
         return null;
       }
       let cursor: string | null = null;
       const seenCursors = new Set<string>();
-      for (let pageIndex = 0; pageIndex < (params.maxPages ?? 3); pageIndex += 1) {
+      for (
+        let pageIndex = 0;
+        pageIndex < (params.maxPages ?? 3);
+        pageIndex += 1
+      ) {
         const page: Page<Cast> = decodeCastsPage(
           await get(
             `${BASE}/feed/user/casts`,
             {
               fid: authorFid,
-              ...pageQuery({ limit: MAX_PAGE_SIZE, cursor, viewerFid: params.viewerFid }),
+              ...pageQuery({
+                limit: MAX_PAGE_SIZE,
+                cursor,
+                viewerFid: params.viewerFid,
+              }),
             },
             options,
           ),
         );
-        const match = page.items.find((cast) => cast.hash.startsWith(normalized));
+        const match = page.items.find((cast) =>
+          cast.hash.startsWith(normalized),
+        );
         if (match) {
           return match;
         }
@@ -212,13 +274,25 @@ function createApi(transport: Transport) {
 
     // --- users ---
 
-    async getUserByFid(fid: Fid, params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User> {
+    async getUserByFid(
+      fid: Fid,
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User> {
       return decodeUserEnvelope(
-        await get(`${BASE}/user`, { fid, viewer_fid: params.viewerFid ?? undefined }, options),
+        await get(
+          `${BASE}/user`,
+          { fid, viewer_fid: params.viewerFid ?? undefined },
+          options,
+        ),
       );
     },
 
-    async getUserByUsername(username: string, params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User> {
+    async getUserByUsername(
+      username: string,
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User> {
       // Lookups are case-sensitive on the node and names are stored lowercase.
       const name = username.trim().replace(/^@/, '').toLowerCase();
       if (name === '') {
@@ -233,7 +307,11 @@ function createApi(transport: Transport) {
       );
     },
 
-    async getUsersByFids(fids: Fid[], params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User[]> {
+    async getUsersByFids(
+      fids: Fid[],
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User[]> {
       const unique = [...new Set(fids)].slice(0, MAX_PAGE_SIZE);
       if (unique.length === 0) {
         return [];
@@ -248,23 +326,47 @@ function createApi(transport: Transport) {
       return page.items.filter((user) => user.exists);
     },
 
-    async getFollowers(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<User>> {
+    async getFollowers(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<User>> {
       return decodeUsersPage(
-        await get(`${BASE}/user/followers`, { fid, ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/user/followers`,
+          { fid, ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
-    async getFollowing(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<User>> {
+    async getFollowing(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<User>> {
       return decodeUsersPage(
-        await get(`${BASE}/user/following`, { fid, ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/user/following`,
+          { fid, ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
-    async getSuggestedFollows(fid: Fid, params: { limit?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User[]> {
+    async getSuggestedFollows(
+      fid: Fid,
+      params: { limit?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User[]> {
       const page = decodeUsersPage(
         await get(
           `${BASE}/following/suggested`,
-          { fid, limit: clampLimit(params.limit ?? 10), viewer_fid: params.viewerFid ?? undefined },
+          {
+            fid,
+            limit: clampLimit(params.limit ?? 10),
+            viewer_fid: params.viewerFid ?? undefined,
+          },
           options,
         ),
       );
@@ -273,7 +375,11 @@ function createApi(transport: Transport) {
 
     // --- search ---
 
-    async searchUsers(query: string, params: { limit?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User[]> {
+    async searchUsers(
+      query: string,
+      params: { limit?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User[]> {
       const page = decodeUsersPage(
         await get(
           `${BASE}/user/search`,
@@ -288,17 +394,32 @@ function createApi(transport: Transport) {
       return page.items;
     },
 
-    async searchCasts(query: string, params: PageParams = {}, options?: CallOptions): Promise<Page<Cast>> {
+    async searchCasts(
+      query: string,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<Cast>> {
       return decodeCastsPage(
-        await get(`${BASE}/cast/search`, { q: query.trim(), ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/cast/search`,
+          { q: query.trim(), ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
-    async searchChannels(query: string, params: { limit?: number } = {}, options?: CallOptions): Promise<Channel[]> {
+    async searchChannels(
+      query: string,
+      params: { limit?: number } = {},
+      options?: CallOptions,
+    ): Promise<Channel[]> {
       const page = decodeChannelsPage(
         await get(
           `${BASE}/channel/search`,
-          { q: query.trim().replace(/^\//, '').toLowerCase(), limit: clampLimit(params.limit) },
+          {
+            q: query.trim().replace(/^\//, '').toLowerCase(),
+            limit: clampLimit(params.limit),
+          },
           options,
         ),
       );
@@ -307,27 +428,49 @@ function createApi(transport: Transport) {
 
     // --- channels ---
 
-    async getChannel(channelId: string, options?: CallOptions): Promise<Channel> {
+    async getChannel(
+      channelId: string,
+      options?: CallOptions,
+    ): Promise<Channel> {
       return decodeChannelEnvelope(
         await get(`${BASE}/channel`, { id: channelId.toLowerCase() }, options),
       );
     },
 
-    async getTrendingChannels(params: { limit?: number } = {}, options?: CallOptions): Promise<Channel[]> {
+    async getTrendingChannels(
+      params: { limit?: number } = {},
+      options?: CallOptions,
+    ): Promise<Channel[]> {
       const page = decodeChannelsPage(
-        await get(`${BASE}/channel/trending`, { limit: clampLimit(params.limit) }, options),
+        await get(
+          `${BASE}/channel/trending`,
+          { limit: clampLimit(params.limit) },
+          options,
+        ),
       );
       return page.items;
     },
 
-    async getUserChannels(fid: Fid, params: { limit?: number } = {}, options?: CallOptions): Promise<Channel[]> {
+    async getUserChannels(
+      fid: Fid,
+      params: { limit?: number } = {},
+      options?: CallOptions,
+    ): Promise<Channel[]> {
       const page = decodeChannelsPage(
-        await get(`${BASE}/user/channels`, { fid, limit: clampLimit(params.limit) }, options),
+        await get(
+          `${BASE}/user/channels`,
+          { fid, limit: clampLimit(params.limit) },
+          options,
+        ),
       );
       return page.items;
     },
 
-    async getChannelMembers(channelId: string, params: PageParams = {}, options?: CallOptions): Promise<Page<ChannelMember>> {
+    async getChannelMembers(
+      channelId: string,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<ChannelMember>> {
       return decodeChannelMembersPage(
         await get(
           `${BASE}/channel/members`,
@@ -339,14 +482,27 @@ function createApi(transport: Transport) {
 
     // --- notifications and reactions ---
 
-    async getNotifications(fid: Fid, params: PageParams = {}, options?: CallOptions): Promise<Page<NotificationItem>> {
+    async getNotifications(
+      fid: Fid,
+      params: PageParams = {},
+      options?: CallOptions,
+    ): Promise<Page<NotificationItem>> {
       return decodeNotificationsPage(
-        await get(`${BASE}/notifications`, { fid, ...pageQuery(params) }, options),
+        await get(
+          `${BASE}/notifications`,
+          { fid, ...pageQuery(params) },
+          options,
+        ),
       );
     },
 
     /** The node returns at most 100 reactions and no cursor. */
-    async getCastReactions(hash: string, kind: ReactionKind, params: { limit?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<Reaction[]> {
+    async getCastReactions(
+      hash: string,
+      kind: ReactionKind,
+      params: { limit?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<Reaction[]> {
       const page = decodeReactionsPage(
         await get(
           `${BASE}/reaction/cast`,
@@ -367,7 +523,12 @@ function createApi(transport: Transport) {
      * so the casts themselves are fetched in one bulk call and returned in
      * reaction order; casts the node no longer has are left out.
      */
-    async getUserReactionCasts(fid: Fid, kind: ReactionKind, params: { limit?: number; viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<Cast[]> {
+    async getUserReactionCasts(
+      fid: Fid,
+      kind: ReactionKind,
+      params: { limit?: number; viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<Cast[]> {
       const page = decodeReactionsPage(
         await get(
           `${BASE}/reaction/user`,
@@ -380,7 +541,11 @@ function createApi(transport: Transport) {
         ),
       );
       const hashes = page.items.map((reaction) => reaction.castHash);
-      const casts = await this.getCastsByHashes(hashes, { viewerFid: params.viewerFid }, options);
+      const casts = await this.getCastsByHashes(
+        hashes,
+        { viewerFid: params.viewerFid },
+        options,
+      );
       const byHash = new Map(casts.map((cast) => [cast.hash, cast]));
       return hashes
         .map((hash) => byHash.get(hash))
@@ -394,11 +559,19 @@ function createApi(transport: Transport) {
     },
 
     /** Resolves "@name", a numeric FID, or "!fid" to a user. */
-    async resolveUser(identifier: string, params: { viewerFid?: Fid | null } = {}, options?: CallOptions): Promise<User> {
+    async resolveUser(
+      identifier: string,
+      params: { viewerFid?: Fid | null } = {},
+      options?: CallOptions,
+    ): Promise<User> {
       const trimmed = identifier.trim();
       const fidMatch = /^!?(\d{1,20})$/.exec(trimmed);
       if (fidMatch) {
-        return this.getUserByFid(BigInt(fidMatch[1]).toString(), params, options);
+        return this.getUserByFid(
+          BigInt(fidMatch[1]).toString(),
+          params,
+          options,
+        );
       }
       return this.getUserByUsername(trimmed, params, options);
     },

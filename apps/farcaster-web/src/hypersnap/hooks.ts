@@ -38,7 +38,13 @@ const MAX_ANCESTORS = 8;
 
 /** Quoted casts referenced by a page, fetched alongside it. */
 type QuotedCasts = Record<CastHash, Cast>;
-type CastPage = Page<Cast> & { quoted: QuotedCasts };
+/** People a page refers to by FID only, such as the author being replied to. */
+type People = Record<Fid, User>;
+/** Everything a list of casts needs in order to render, beyond the casts. */
+type CastContext = { quoted: QuotedCasts; people: People };
+type CastPage = Page<Cast> & CastContext;
+
+const EMPTY_CONTEXT: CastContext = { quoted: {}, people: {} };
 
 function quotedHashesOf(casts: Cast[]): CastHash[] {
   const known = new Set(casts.map((cast) => cast.hash));
@@ -72,7 +78,11 @@ async function loadQuoted(
     return quoted;
   }
   try {
-    const fetched = await api.getCastsByHashes(hashes, { viewerFid }, { signal });
+    const fetched = await api.getCastsByHashes(
+      hashes,
+      { viewerFid },
+      { signal },
+    );
     for (const cast of fetched) {
       quoted[cast.hash] = cast;
     }
@@ -84,12 +94,57 @@ async function loadQuoted(
   return quoted;
 }
 
+/**
+ * A reply names its parent's author by FID alone. Resolve the ones not
+ * already on the page with one bulk lookup, so "Replying to @name" can be
+ * shown without a request per cast. Failure here is not fatal either.
+ */
+async function loadPeople(
+  casts: Cast[],
+  quoted: QuotedCasts,
+  signal: AbortSignal | undefined,
+): Promise<People> {
+  const people: People = {};
+  for (const cast of [...casts, ...Object.values(quoted)]) {
+    people[cast.author.fid] = cast.author;
+  }
+  const missing = new Set<Fid>();
+  for (const cast of casts) {
+    if (cast.parentAuthorFid !== null && !(cast.parentAuthorFid in people)) {
+      missing.add(cast.parentAuthorFid);
+    }
+  }
+  if (missing.size === 0) {
+    return people;
+  }
+  try {
+    const fetched = await api.getUsersByFids([...missing], {}, { signal });
+    for (const user of fetched) {
+      people[user.fid] = user;
+    }
+  } catch (error) {
+    if (isHypersnapError(error) && error.kind === 'aborted') {
+      throw error;
+    }
+  }
+  return people;
+}
+
+async function loadCastContext(
+  casts: Cast[],
+  viewerFid: Fid | null,
+  signal: AbortSignal | undefined,
+): Promise<CastContext> {
+  const quoted = await loadQuoted(casts, viewerFid, signal);
+  return { quoted, people: await loadPeople(casts, quoted, signal) };
+}
+
 async function withQuoted(
   page: Page<Cast>,
   viewerFid: Fid | null,
   signal: AbortSignal | undefined,
 ): Promise<CastPage> {
-  return { ...page, quoted: await loadQuoted(page.items, viewerFid, signal) };
+  return { ...page, ...(await loadCastContext(page.items, viewerFid, signal)) };
 }
 
 /**
@@ -155,15 +210,27 @@ function useCastFeed(
 
   const casts = useMemo(
     () =>
-      dedupe(query.data?.pages.flatMap((page) => page.items) ?? [], (cast) => cast.hash),
+      dedupe(
+        query.data?.pages.flatMap((page) => page.items) ?? [],
+        (cast) => cast.hash,
+      ),
     [query.data],
   );
-  const quoted = useMemo(
-    () => Object.assign({}, ...(query.data?.pages.map((page) => page.quoted) ?? [])) as QuotedCasts,
+  const context = useMemo<CastContext>(
+    () => ({
+      quoted: Object.assign(
+        {},
+        ...(query.data?.pages.map((page) => page.quoted) ?? []),
+      ),
+      people: Object.assign(
+        {},
+        ...(query.data?.pages.map((page) => page.people) ?? []),
+      ),
+    }),
     [query.data],
   );
 
-  return { ...query, casts, quoted };
+  return { ...query, casts, context };
 }
 
 function useCursorList<T>(
@@ -232,8 +299,10 @@ function useUserCasts(fid: Fid | null, tab: 'casts' | 'replies') {
 
 function useChannelFeed(channelId: string) {
   const viewerFid = useViewerFid();
-  return useCastFeed(queryKeys.channelFeed(channelId, viewerFid), (cursor, signal) =>
-    api.getChannelFeed(channelId, { cursor, viewerFid }, { signal }),
+  return useCastFeed(
+    queryKeys.channelFeed(channelId, viewerFid),
+    (cursor, signal) =>
+      api.getChannelFeed(channelId, { cursor, viewerFid }, { signal }),
   );
 }
 
@@ -241,7 +310,8 @@ function useCastSearch(query: string) {
   const viewerFid = useViewerFid();
   return useCastFeed(
     queryKeys.searchCasts(query, viewerFid),
-    (cursor, signal) => api.searchCasts(query, { cursor, viewerFid }, { signal }),
+    (cursor, signal) =>
+      api.searchCasts(query, { cursor, viewerFid }, { signal }),
     { enabled: query !== '' },
   );
 }
@@ -259,8 +329,16 @@ function useUserLikes(fid: Fid | null) {
   return useQuery({
     queryKey: queryKeys.userCasts(fid ?? '0', 'likes', viewerFid),
     queryFn: async ({ signal }) => {
-      const casts = await api.getUserReactionCasts(fid as Fid, 'like', { viewerFid }, { signal });
-      return { casts, quoted: await loadQuoted(casts, viewerFid, signal) };
+      const casts = await api.getUserReactionCasts(
+        fid as Fid,
+        'like',
+        { viewerFid },
+        { signal },
+      );
+      return {
+        casts,
+        context: await loadCastContext(casts, viewerFid, signal),
+      };
     },
     enabled: fid !== null,
     staleTime: FEED_STALE_MS,
@@ -276,7 +354,11 @@ function useCastsByHash(hashes: CastHash[]) {
       const found: Cast[] = [];
       for (let i = 0; i < hashes.length; i += 100) {
         found.push(
-          ...(await api.getCastsByHashes(hashes.slice(i, i + 100), { viewerFid }, { signal })),
+          ...(await api.getCastsByHashes(
+            hashes.slice(i, i + 100),
+            { viewerFid },
+            { signal },
+          )),
         );
       }
       const byHash = new Map(found.map((cast) => [cast.hash, cast]));
@@ -286,7 +368,7 @@ function useCastsByHash(hashes: CastHash[]) {
       return {
         casts,
         missing: hashes.length - casts.length,
-        quoted: await loadQuoted(casts, viewerFid, signal),
+        context: await loadCastContext(casts, viewerFid, signal),
       };
     },
     enabled: hashes.length > 0,
@@ -302,10 +384,13 @@ type ConversationView = {
   /** True when the chain above was cut short or a parent is missing. */
   ancestorsIncomplete: boolean;
   root: ConversationNode;
-  quoted: QuotedCasts;
+  context: CastContext;
 };
 
-function flattenConversation(node: ConversationNode, into: Cast[] = []): Cast[] {
+function flattenConversation(
+  node: ConversationNode,
+  into: Cast[] = [],
+): Cast[] {
   into.push(node.cast);
   node.replies.forEach((reply) => flattenConversation(reply, into));
   return into;
@@ -330,7 +415,11 @@ async function fetchConversation(
     }
     visited.add(parentHash);
     try {
-      const parent: Cast = await api.getCast(parentHash, { viewerFid }, { signal });
+      const parent: Cast = await api.getCast(
+        parentHash,
+        { viewerFid },
+        { signal },
+      );
       ancestors.unshift(parent);
       parentHash = parent.parentHash;
     } catch (error) {
@@ -343,19 +432,20 @@ async function fetchConversation(
     }
   }
 
-  const quoted = await loadQuoted(
+  const context = await loadCastContext(
     [...ancestors, ...flattenConversation(root)],
     viewerFid,
     signal,
   );
-  return { ancestors, ancestorsIncomplete, root, quoted };
+  return { ancestors, ancestorsIncomplete, root, context };
 }
 
 function useConversation(hash: CastHash | null) {
   const viewerFid = useViewerFid();
   return useQuery({
     queryKey: queryKeys.conversation(hash ?? '0x', viewerFid),
-    queryFn: ({ signal }) => fetchConversation(hash as CastHash, viewerFid, signal),
+    queryFn: ({ signal }) =>
+      fetchConversation(hash as CastHash, viewerFid, signal),
     enabled: hash !== null,
     staleTime: FEED_STALE_MS,
   });
@@ -365,7 +455,10 @@ function useConversation(hash: CastHash | null) {
  * Turns the hash in a URL into a full cast hash: used as is when complete,
  * otherwise found by scanning the named author's recent casts.
  */
-function useResolvedCastHash(username: string | undefined, hashParam: string | undefined) {
+function useResolvedCastHash(
+  username: string | undefined,
+  hashParam: string | undefined,
+) {
   const full = normalizeHash(hashParam);
   const prefix = normalizeHashPrefix(hashParam);
   const needsScan = full === null && prefix !== null && !!username;
@@ -373,8 +466,17 @@ function useResolvedCastHash(username: string | undefined, hashParam: string | u
   const scan = useQuery({
     queryKey: queryKeys.castByPrefix(username ?? '', prefix ?? ''),
     queryFn: async ({ signal }) => {
-      const author = await api.getUserByUsername(username as string, {}, { signal });
-      const cast = await api.findCastByHashPrefix(author.fid, prefix as string, {}, { signal });
+      const author = await api.getUserByUsername(
+        username as string,
+        {},
+        { signal },
+      );
+      const cast = await api.findCastByHashPrefix(
+        author.fid,
+        prefix as string,
+        {},
+        { signal },
+      );
       if (cast === null) {
         throw new HypersnapError(
           'not_found',
@@ -388,13 +490,21 @@ function useResolvedCastHash(username: string | undefined, hashParam: string | u
   });
 
   if (full !== null) {
-    return { hash: full, isPending: false, error: null as Error | null, refetch: scan.refetch };
+    return {
+      hash: full,
+      isPending: false,
+      error: null as Error | null,
+      refetch: scan.refetch,
+    };
   }
   if (!needsScan) {
     return {
       hash: null,
       isPending: false,
-      error: new HypersnapError('not_found', 'That is not a cast link') as Error,
+      error: new HypersnapError(
+        'not_found',
+        'That is not a cast link',
+      ) as Error,
       refetch: scan.refetch,
     };
   }
@@ -420,7 +530,8 @@ function useUserByFid(fid: Fid | null) {
   const viewerFid = useViewerFid();
   return useQuery({
     queryKey: queryKeys.userByFid(fid ?? '0', viewerFid),
-    queryFn: ({ signal }) => api.getUserByFid(fid as Fid, { viewerFid }, { signal }),
+    queryFn: ({ signal }) =>
+      api.getUserByFid(fid as Fid, { viewerFid }, { signal }),
     enabled: fid !== null,
     staleTime: PROFILE_STALE_MS,
   });
@@ -438,7 +549,10 @@ function useUserByUsername(username: string | null) {
 }
 
 /** A profile addressed either way: "/~/profiles/:fid" or "/:username". */
-function useProfile(target: { fid: string | undefined; username: string | undefined }) {
+function useProfile(target: {
+  fid: string | undefined;
+  username: string | undefined;
+}) {
   const fid = target.fid !== undefined ? parseFid(target.fid) : null;
   const byFid = useUserByFid(fid);
   const byUsername = useUserByUsername(
@@ -465,7 +579,8 @@ function useFollowers(fid: Fid) {
   const viewerFid = useViewerFid();
   return useCursorList(
     queryKeys.followers(fid, viewerFid),
-    (cursor, signal) => api.getFollowers(fid, { cursor, limit: 50, viewerFid }, { signal }),
+    (cursor, signal) =>
+      api.getFollowers(fid, { cursor, limit: 50, viewerFid }, { signal }),
     userKey,
     { staleTime: PROFILE_STALE_MS },
   );
@@ -475,7 +590,8 @@ function useFollowingList(fid: Fid) {
   const viewerFid = useViewerFid();
   return useCursorList(
     queryKeys.followingList(fid, viewerFid),
-    (cursor, signal) => api.getFollowing(fid, { cursor, limit: 50, viewerFid }, { signal }),
+    (cursor, signal) =>
+      api.getFollowing(fid, { cursor, limit: 50, viewerFid }, { signal }),
     userKey,
     { staleTime: PROFILE_STALE_MS },
   );
@@ -484,7 +600,8 @@ function useFollowingList(fid: Fid) {
 function useSuggestedFollows(fid: Fid | null) {
   return useQuery({
     queryKey: queryKeys.suggested(fid ?? '0'),
-    queryFn: ({ signal }) => api.getSuggestedFollows(fid as Fid, { limit: 5 }, { signal }),
+    queryFn: ({ signal }) =>
+      api.getSuggestedFollows(fid as Fid, { limit: 5 }, { signal }),
     enabled: fid !== null,
     staleTime: CHANNEL_STALE_MS,
   });
@@ -494,7 +611,8 @@ function useUserSearch(query: string) {
   const viewerFid = useViewerFid();
   return useQuery({
     queryKey: queryKeys.searchUsers(query, viewerFid),
-    queryFn: ({ signal }) => api.searchUsers(query, { limit: 30, viewerFid }, { signal }),
+    queryFn: ({ signal }) =>
+      api.searchUsers(query, { limit: 30, viewerFid }, { signal }),
     enabled: query !== '',
     staleTime: FEED_STALE_MS,
   });
@@ -521,7 +639,8 @@ function useTrendingChannels(limit = 10) {
 function useChannelSearch(query: string) {
   return useQuery<Channel[]>({
     queryKey: queryKeys.searchChannels(query),
-    queryFn: ({ signal }) => api.searchChannels(query, { limit: 30 }, { signal }),
+    queryFn: ({ signal }) =>
+      api.searchChannels(query, { limit: 30 }, { signal }),
     enabled: query !== '',
     staleTime: FEED_STALE_MS,
   });
@@ -532,7 +651,8 @@ const memberKey = (member: ChannelMember) => member.user.fid;
 function useChannelMembers(channelId: string) {
   return useCursorList(
     queryKeys.channelMembers(channelId),
-    (cursor, signal) => api.getChannelMembers(channelId, { cursor, limit: 50 }, { signal }),
+    (cursor, signal) =>
+      api.getChannelMembers(channelId, { cursor, limit: 50 }, { signal }),
     memberKey,
     { staleTime: CHANNEL_STALE_MS },
   );
@@ -543,13 +663,65 @@ function useChannelMembers(channelId: string) {
 const notificationKey = (item: NotificationItem) =>
   `${item.kind}:${item.actor.fid}:${item.cast?.hash ?? ''}:${item.timestamp ?? ''}`;
 
+type NotificationPage = Page<NotificationItem> & CastContext;
+
+/** Kinds shown as a full cast, which therefore need quoted casts and parents. */
+const SHOWN_AS_CAST: ReadonlySet<NotificationItem['kind']> = new Set([
+  'quote',
+  'reply',
+  'mention',
+]);
+
 function useNotifications(fid: Fid | null) {
-  return useCursorList(
-    queryKeys.notifications(fid ?? '0'),
-    (cursor, signal) => api.getNotifications(fid as Fid, { cursor, limit: 25 }, { signal }),
-    notificationKey,
-    { enabled: fid !== null, staleTime: NOTIFICATIONS_STALE_MS },
+  const viewerFid = viewerFidOf(useSession());
+  const query = useInfiniteQuery<
+    NotificationPage,
+    Error,
+    InfiniteData<NotificationPage, string | null>,
+    readonly unknown[],
+    string | null
+  >({
+    queryKey: [...queryKeys.notifications(fid ?? '0'), viewerFid ?? 'public'],
+    initialPageParam: null,
+    queryFn: async ({ pageParam, signal }) => {
+      const page = await api.getNotifications(
+        fid as Fid,
+        { cursor: pageParam, limit: 25 },
+        { signal },
+      );
+      const casts = page.items.flatMap((item) =>
+        item.cast && SHOWN_AS_CAST.has(item.kind) ? [item.cast] : [],
+      );
+      return { ...page, ...(await loadCastContext(casts, viewerFid, signal)) };
+    },
+    getNextPageParam: nextCursorOrStop,
+    enabled: fid !== null,
+    staleTime: NOTIFICATIONS_STALE_MS,
+  });
+
+  const items = useMemo(
+    () =>
+      dedupe(
+        query.data?.pages.flatMap((page) => page.items) ?? [],
+        notificationKey,
+      ),
+    [query.data],
   );
+  const context = useMemo<CastContext>(
+    () => ({
+      quoted: Object.assign(
+        {},
+        ...(query.data?.pages.map((page) => page.quoted) ?? []),
+      ),
+      people: Object.assign(
+        {},
+        ...(query.data?.pages.map((page) => page.people) ?? []),
+      ),
+    }),
+    [query.data],
+  );
+
+  return { ...query, items, context };
 }
 
 // --- node -----------------------------------------------------------------
@@ -570,6 +742,7 @@ function forgetSubject(queryClient: QueryClient, fid: Fid): void {
 
 export {
   dedupe,
+  EMPTY_CONTEXT,
   fetchConversation,
   forgetSubject,
   nextCursorOrStop,
@@ -601,4 +774,4 @@ export {
   useUserSearch,
   useViewerFid,
 };
-export type { CastPage, ConversationView, QuotedCasts };
+export type { CastContext, CastPage, ConversationView, People, QuotedCasts };

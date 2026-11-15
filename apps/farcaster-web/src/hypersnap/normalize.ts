@@ -519,7 +519,12 @@ function decodeNotificationsPage(body: unknown): Page<NotificationItem> {
     const timestamp = decodeTimestamp(
       entry.timestamp ?? entry.most_recent_timestamp,
     );
-    const base = { kind, cast, timestamp: timestamp.iso, timestampMs: timestamp.ms };
+    const base = {
+      kind,
+      cast,
+      timestamp: timestamp.iso,
+      timestampMs: timestamp.ms,
+    };
 
     // Observed: one row per actor in `user`. Documented: aggregate arrays.
     const actors = [

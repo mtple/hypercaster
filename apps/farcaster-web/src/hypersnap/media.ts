@@ -99,4 +99,9 @@ const BROWSABLE_CHANNEL_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const isBrowsableChannelId = (id: string): boolean =>
   BROWSABLE_CHANNEL_ID.test(id);
 
-export { channelIdFromParentUrl, classifyUrl, isBrowsableChannelId, safeHttpUrl };
+export {
+  channelIdFromParentUrl,
+  classifyUrl,
+  isBrowsableChannelId,
+  safeHttpUrl,
+};

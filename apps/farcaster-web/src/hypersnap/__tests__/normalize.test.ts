@@ -18,7 +18,8 @@ import {
 } from '~/hypersnap/normalize';
 
 const world = createWorld();
-const query = (params: Record<string, string> = {}) => new URLSearchParams(params);
+const query = (params: Record<string, string> = {}) =>
+  new URLSearchParams(params);
 
 describe('users', () => {
   it('decodes a legacy user', () => {
@@ -54,7 +55,10 @@ describe('users', () => {
   });
 
   it('reports the empty placeholder for an unknown FID as not found', () => {
-    const { body } = world.handle('/v2/farcaster/user', query({ fid: '99999999999' }));
+    const { body } = world.handle(
+      '/v2/farcaster/user',
+      query({ fid: '99999999999' }),
+    );
     expect(decodeUser((body as { user: unknown }).user)?.exists).toBe(false);
     expect(() => decodeUserEnvelope(body)).toThrowError(
       expect.objectContaining({ kind: 'not_found' }),
@@ -72,7 +76,9 @@ describe('users', () => {
   });
 
   it('drops an unsafe avatar URL', () => {
-    expect(decodeUser({ fid: 7, pfp_url: 'javascript:alert(1)' })?.pfpUrl).toBeNull();
+    expect(
+      decodeUser({ fid: 7, pfp_url: 'javascript:alert(1)' })?.pfpUrl,
+    ).toBeNull();
   });
 
   it('rejects objects without a usable FID', () => {
@@ -83,7 +89,10 @@ describe('users', () => {
   });
 
   it('reads viewer context when the node includes it', () => {
-    const { body } = world.handle('/v2/farcaster/user', query({ fid: '1002', viewer_fid: '1001' }));
+    const { body } = world.handle(
+      '/v2/farcaster/user',
+      query({ fid: '1002', viewer_fid: '1001' }),
+    );
     expect(decodeUserEnvelope(body).viewerContext).toEqual({
       following: true,
       followedBy: true,
@@ -91,9 +100,15 @@ describe('users', () => {
   });
 
   it('unwraps both list shapes', () => {
-    const plain = decodeUsersPage({ users: [world.users.ada], next: { cursor: '50' } });
+    const plain = decodeUsersPage({
+      users: [world.users.ada],
+      next: { cursor: '50' },
+    });
     const wrapped = decodeUsersPage({
-      result: { users: [{ object: 'follower', user: world.users.ben }], next: {} },
+      result: {
+        users: [{ object: 'follower', user: world.users.ben }],
+        next: {},
+      },
     });
     expect(plain.items[0].username).toBe('ada');
     expect(plain.nextCursor).toBe('50');
@@ -118,7 +133,9 @@ describe('mentions', () => {
       [{ fid: 774935, username: 'kita' }],
       [{ start: 54, end: 54 }],
     );
-    expect(text).toBe('発見タイム😏\n\n夢の箱あったあった😍\n\n@kita 売り切れごめん');
+    expect(text).toBe(
+      '発見タイム😏\n\n夢の箱あったあった😍\n\n@kita 売り切れごめん',
+    );
     expect(text.slice(mentions[0].start, mentions[0].end)).toBe('@kita');
     expect(mentions[0]).toMatchObject({ fid: '774935', username: 'kita' });
   });
@@ -138,18 +155,30 @@ describe('mentions', () => {
       ],
     );
     expect(text).toBe('@a and @b@c met');
-    expect(mentions.map((m) => text.slice(m.start, m.end))).toEqual(['@a', '@b', '@c']);
+    expect(mentions.map((m) => text.slice(m.start, m.end))).toEqual([
+      '@a',
+      '@b',
+      '@c',
+    ]);
   });
 
   it('uses !fid for a mentioned account without a username', () => {
     expect(
-      restoreMentions('hi ', [{ fid: '4294967296', username: 'fid:4294967296' }], [{ start: 3, end: 3 }]).text,
+      restoreMentions(
+        'hi ',
+        [{ fid: '4294967296', username: 'fid:4294967296' }],
+        [{ start: 3, end: 3 }],
+      ).text,
     ).toBe('hi !4294967296');
   });
 
   it('never splits a multi-byte character when an offset is off', () => {
     // Offset 1 lands inside the 3-byte "朝".
-    const { text } = restoreMentions('朝', [{ fid: 1, username: 'a' }], [{ start: 1, end: 1 }]);
+    const { text } = restoreMentions(
+      '朝',
+      [{ fid: 1, username: 'a' }],
+      [{ start: 1, end: 1 }],
+    );
     expect(text).toBe('@a朝');
   });
 
@@ -166,7 +195,11 @@ describe('mentions', () => {
   it('ignores ranges that are out of bounds or malformed', () => {
     const { text, mentions } = restoreMentions(
       'hello',
-      [{ fid: 1, username: 'a' }, { fid: 2, username: 'b' }, { fid: 3, username: 'c' }],
+      [
+        { fid: 1, username: 'a' },
+        { fid: 2, username: 'b' },
+        { fid: 3, username: 'c' },
+      ],
       [{ start: 99, end: 99 }, { start: -1 }, { start: 'x' }],
     );
     expect(text).toBe('hello');
@@ -196,16 +229,32 @@ describe('casts', () => {
 
   it('restores a mention inside multi-byte text', () => {
     const cast = decodeCast(world.casts.walk)!;
-    expect(cast.text).toBe('朝の散歩で見つけた景色 📷\n\n@ada さん、この前の話の続きです ✨');
+    expect(cast.text).toBe(
+      '朝の散歩で見つけた景色 📷\n\n@ada さん、この前の話の続きです ✨',
+    );
     expect(cast.mentions).toHaveLength(1);
-    expect(cast.text.slice(cast.mentions[0].start, cast.mentions[0].end)).toBe('@ada');
+    expect(cast.text.slice(cast.mentions[0].start, cast.mentions[0].end)).toBe(
+      '@ada',
+    );
   });
 
   it('classifies embeds and drops unsafe ones', () => {
-    expect(decodeCast(world.casts.walk)?.embeds.map((e) => e.kind)).toEqual(['image', 'image']);
-    expect(decodeCast(world.casts.clip)?.embeds[0]).toMatchObject({ kind: 'video', streaming: false });
-    expect(decodeCast(world.casts.stream)?.embeds[0]).toMatchObject({ kind: 'video', streaming: true });
-    expect(decodeCast(world.casts.links)?.embeds[0]).toMatchObject({ kind: 'link', host: 'longreads.example' });
+    expect(decodeCast(world.casts.walk)?.embeds.map((e) => e.kind)).toEqual([
+      'image',
+      'image',
+    ]);
+    expect(decodeCast(world.casts.clip)?.embeds[0]).toMatchObject({
+      kind: 'video',
+      streaming: false,
+    });
+    expect(decodeCast(world.casts.stream)?.embeds[0]).toMatchObject({
+      kind: 'video',
+      streaming: true,
+    });
+    expect(decodeCast(world.casts.links)?.embeds[0]).toMatchObject({
+      kind: 'link',
+      host: 'longreads.example',
+    });
     expect(decodeCast(world.casts.unsafe)?.embeds).toEqual([]);
   });
 
@@ -250,7 +299,10 @@ describe('casts', () => {
   });
 
   it('accepts cast search nested under `result`', () => {
-    const { body } = world.handle('/v2/farcaster/cast/search', query({ q: 'tide' }));
+    const { body } = world.handle(
+      '/v2/farcaster/cast/search',
+      query({ q: 'tide' }),
+    );
     expect(decodeCastsPage(body).items[0].author.username).toBe('ben');
   });
 
@@ -294,25 +346,45 @@ describe('conversation', () => {
   it('decodes the observed nested shape', () => {
     const { body } = world.handle(
       '/v2/farcaster/cast/conversation',
-      query({ identifier: world.casts.launch.hash, type: 'hash', reply_depth: '3' }),
+      query({
+        identifier: world.casts.launch.hash,
+        type: 'hash',
+        reply_depth: '3',
+      }),
     );
     const root = decodeConversation(body);
     expect(root.cast.hash).toBe(`0x${world.casts.launch.hash}`);
-    expect(root.replies.map((r) => r.cast.author.username)).toEqual(['ben', 'esme', 'farid']);
+    expect(root.replies.map((r) => r.cast.author.username)).toEqual([
+      'ben',
+      'esme',
+      'farid',
+    ]);
     expect(root.replies[0].replies[0].cast.author.username).toBe('ada');
-    expect(root.replies[0].replies[0].replies[0].cast.author.username).toBe('chiyo');
+    expect(root.replies[0].replies[0].replies[0].cast.author.username).toBe(
+      'chiyo',
+    );
   });
 
   it('decodes the documented { cast, replies } shape too', () => {
     const root = decodeConversation({
       cast: world.casts.launch,
-      replies: [{ cast: world.casts.reply1, replies: [{ cast: world.casts.reply1a, replies: [] }] }],
+      replies: [
+        {
+          cast: world.casts.reply1,
+          replies: [{ cast: world.casts.reply1a, replies: [] }],
+        },
+      ],
     });
-    expect(root.replies[0].replies[0].cast.hash).toBe(`0x${world.casts.reply1a.hash}`);
+    expect(root.replies[0].replies[0].cast.hash).toBe(
+      `0x${world.casts.reply1a.hash}`,
+    );
   });
 
   it('caps runaway nesting', () => {
-    let node: Record<string, unknown> = { ...world.casts.gm, direct_replies: [] };
+    let node: Record<string, unknown> = {
+      ...world.casts.gm,
+      direct_replies: [],
+    };
     for (let i = 0; i < 40; i += 1) {
       node = { ...world.casts.gm, direct_replies: [node] };
     }
@@ -336,25 +408,55 @@ describe('channels', () => {
   it('keeps real channels and filters token pseudo-channels', () => {
     const page = decodeChannelsPage({ channels: world.channels, next: {} });
     expect(page.items.map((c) => c.id)).toEqual(['builders', 'photo', 'music']);
-    expect(page.items[0]).toMatchObject({ name: 'builders', memberCount: 128, imageUrl: null, description: null });
+    expect(page.items[0]).toMatchObject({
+      name: 'builders',
+      memberCount: 128,
+      imageUrl: null,
+      description: null,
+    });
   });
 
   it('decodes members from `members` (observed) and `users` (documented)', () => {
-    const { body } = world.handle('/v2/farcaster/channel/members', query({ channel_id: 'photo' }));
-    expect(decodeChannelMembersPage(body).items.map((m) => [m.user.username, m.role])).toEqual([
+    const { body } = world.handle(
+      '/v2/farcaster/channel/members',
+      query({ channel_id: 'photo' }),
+    );
+    expect(
+      decodeChannelMembersPage(body).items.map((m) => [
+        m.user.username,
+        m.role,
+      ]),
+    ).toEqual([
       ['ben', 'member'],
       ['chiyo', 'member'],
     ]);
-    expect(decodeChannelMembersPage({ users: [world.users.ada] }).items[0]).toMatchObject({ role: '' });
+    expect(
+      decodeChannelMembersPage({ users: [world.users.ada] }).items[0],
+    ).toMatchObject({ role: '' });
   });
 });
 
 describe('notifications', () => {
   it('maps the observed type names', () => {
-    const { body } = world.handle('/v2/farcaster/notifications', query({ fid: '1001', limit: '13' }));
+    const { body } = world.handle(
+      '/v2/farcaster/notifications',
+      query({ fid: '1001', limit: '13' }),
+    );
     const page = decodeNotificationsPage(body);
     expect(page.items.map((n) => n.kind)).toEqual([
-      'like', 'follow', 'quote', 'like', 'recast', 'reply', 'like', 'reply', 'like', 'like', 'recast', 'mention', 'follow',
+      'like',
+      'follow',
+      'quote',
+      'like',
+      'recast',
+      'reply',
+      'like',
+      'reply',
+      'like',
+      'like',
+      'recast',
+      'mention',
+      'follow',
     ]);
     expect(page.items[1]).toMatchObject({ cast: null });
     expect(page.items[1].actor.username).toBe('nova');
@@ -364,9 +466,20 @@ describe('notifications', () => {
   it('maps the documented type names and aggregate arrays', () => {
     const page = decodeNotificationsPage({
       notifications: [
-        { type: 'cast-reply', most_recent_timestamp: 1794700000, cast: world.casts.reply1 },
-        { type: 'follow', follows: [{ user: world.users.ben }, { user: world.users.gus }] },
-        { type: 'reaction', cast: world.casts.launch, reactions: [{ user: world.users.esme }] },
+        {
+          type: 'cast-reply',
+          most_recent_timestamp: 1794700000,
+          cast: world.casts.reply1,
+        },
+        {
+          type: 'follow',
+          follows: [{ user: world.users.ben }, { user: world.users.gus }],
+        },
+        {
+          type: 'reaction',
+          cast: world.casts.launch,
+          reactions: [{ user: world.users.esme }],
+        },
         { type: 'brand-new-kind', user: world.users.hana },
       ],
       next: {},

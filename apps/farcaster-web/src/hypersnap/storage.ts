@@ -37,7 +37,10 @@ function readRaw(key: string): string | null {
   return memory.get(fullKey) ?? null;
 }
 
-function readJson<T>(key: string, isValid: (value: unknown) => value is T): T | null {
+function readJson<T>(
+  key: string,
+  isValid: (value: unknown) => value is T,
+): T | null {
   const raw = readRaw(key);
   if (raw === null) {
     return null;

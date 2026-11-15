@@ -39,7 +39,10 @@ function quoteUnsafeIntegers(text: string): string {
       continue;
     }
 
-    if (isDigit(code) || (code === 45 /* - */ && isDigit(text.charCodeAt(i + 1)))) {
+    if (
+      isDigit(code) ||
+      (code === 45 /* - */ && isDigit(text.charCodeAt(i + 1)))
+    ) {
       const start = i;
       i += 1;
       while (i < length && isDigit(text.charCodeAt(i))) {
@@ -66,7 +69,9 @@ function quoteUnsafeIntegers(text: string): string {
       }
 
       const literal = text.slice(start, i);
-      const digits = literal.startsWith('-') ? literal.length - 1 : literal.length;
+      const digits = literal.startsWith('-')
+        ? literal.length - 1
+        : literal.length;
       if (digits >= 16) {
         const value = BigInt(literal);
         if (value > MAX_SAFE || value < -MAX_SAFE) {

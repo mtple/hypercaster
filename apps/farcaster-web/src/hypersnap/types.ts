@@ -137,7 +137,11 @@ type Page<T> = {
 type NodeInfo = {
   numMessages: number | null;
   numFidRegistrations: number | null;
-  shardHeights: { shardId: number; maxHeight: number; blockDelay: number | null }[];
+  shardHeights: {
+    shardId: number;
+    maxHeight: number;
+    blockDelay: number | null;
+  }[];
 };
 
 export type {

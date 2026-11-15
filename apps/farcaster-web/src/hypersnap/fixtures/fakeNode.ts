@@ -15,7 +15,9 @@ type Override = (
 
 const NODE_URL = 'https://node.example';
 
-function createFakeNode(options: { world?: World; writesEnabled?: boolean } = {}) {
+function createFakeNode(
+  options: { world?: World; writesEnabled?: boolean } = {},
+) {
   const world = options.world ?? createWorld();
   const requests: RecordedRequest[] = [];
   let override: Override | null = null;
@@ -25,7 +27,9 @@ function createFakeNode(options: { world?: World; writesEnabled?: boolean } = {}
     const method = (init?.method ?? 'GET').toUpperCase();
     requests.push({ method, url: url.href, path: url.pathname });
 
-    const overridden = override ? override(url.pathname, url.searchParams) : null;
+    const overridden = override
+      ? override(url.pathname, url.searchParams)
+      : null;
     if (overridden === 'network-error') {
       throw new TypeError('Failed to fetch');
     }

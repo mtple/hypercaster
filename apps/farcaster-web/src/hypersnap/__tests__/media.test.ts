@@ -7,7 +7,9 @@ import {
 
 describe('safeHttpUrl', () => {
   it('allows http and https', () => {
-    expect(safeHttpUrl('https://example.com/a?b=1')).toBe('https://example.com/a?b=1');
+    expect(safeHttpUrl('https://example.com/a?b=1')).toBe(
+      'https://example.com/a?b=1',
+    );
     expect(safeHttpUrl(' http://example.com ')).toBe('http://example.com/');
   });
 
@@ -39,12 +41,20 @@ describe('classifyUrl', () => {
       kind: 'image',
       url: 'https://cdn.example/pic.JPG?w=2',
     });
-    expect(classifyUrl('https://imagedelivery.net/acct/abc-123/original')?.kind).toBe('image');
+    expect(
+      classifyUrl('https://imagedelivery.net/acct/abc-123/original')?.kind,
+    ).toBe('image');
   });
 
   it('separates file video from streams', () => {
-    expect(classifyUrl('https://v.example/a.mp4')).toMatchObject({ kind: 'video', streaming: false });
-    expect(classifyUrl('https://v.example/a/master.m3u8')).toMatchObject({ kind: 'video', streaming: true });
+    expect(classifyUrl('https://v.example/a.mp4')).toMatchObject({
+      kind: 'video',
+      streaming: false,
+    });
+    expect(classifyUrl('https://v.example/a/master.m3u8')).toMatchObject({
+      kind: 'video',
+      streaming: true,
+    });
   });
 
   it('treats everything else as a link and strips www', () => {
@@ -63,8 +73,12 @@ describe('classifyUrl', () => {
 
 describe('channels', () => {
   it('reads the channel id from a parent URL on any host', () => {
-    expect(channelIdFromParentUrl('https://warpcast.com/~/channel/memes')).toBe('memes');
-    expect(channelIdFromParentUrl('https://channels.example/~/channel/Photo/')).toBe('photo');
+    expect(channelIdFromParentUrl('https://warpcast.com/~/channel/memes')).toBe(
+      'memes',
+    );
+    expect(
+      channelIdFromParentUrl('https://channels.example/~/channel/Photo/'),
+    ).toBe('photo');
   });
 
   it('ignores non-channel parents', () => {

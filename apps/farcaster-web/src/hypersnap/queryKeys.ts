@@ -22,12 +22,20 @@ const queryKeys = {
     [...root, 'subject', fid, 'notifications'] as const,
   suggested: (fid: Fid) => [...root, 'subject', fid, 'suggested'] as const,
 
-  userCasts: (fid: Fid, tab: 'casts' | 'replies' | 'likes', viewerFid: Fid | null) =>
-    [...root, 'user', fid, tab, viewerPart(viewerFid)] as const,
+  userCasts: (
+    fid: Fid,
+    tab: 'casts' | 'replies' | 'likes',
+    viewerFid: Fid | null,
+  ) => [...root, 'user', fid, tab, viewerPart(viewerFid)] as const,
   userByFid: (fid: Fid, viewerFid: Fid | null) =>
     [...root, 'user', fid, 'profile', viewerPart(viewerFid)] as const,
   userByUsername: (username: string, viewerFid: Fid | null) =>
-    [...root, 'username', username.toLowerCase(), viewerPart(viewerFid)] as const,
+    [
+      ...root,
+      'username',
+      username.toLowerCase(),
+      viewerPart(viewerFid),
+    ] as const,
   followers: (fid: Fid, viewerFid: Fid | null) =>
     [...root, 'user', fid, 'followers', viewerPart(viewerFid)] as const,
   followingList: (fid: Fid, viewerFid: Fid | null) =>
@@ -36,7 +44,12 @@ const queryKeys = {
   conversation: (hash: CastHash, viewerFid: Fid | null) =>
     [...root, 'cast', hash, 'conversation', viewerPart(viewerFid)] as const,
   castByPrefix: (username: string, prefix: string) =>
-    [...root, 'cast-prefix', username.toLowerCase(), prefix.toLowerCase()] as const,
+    [
+      ...root,
+      'cast-prefix',
+      username.toLowerCase(),
+      prefix.toLowerCase(),
+    ] as const,
   castReactions: (hash: CastHash, kind: ReactionKind) =>
     [...root, 'cast', hash, 'reactions', kind] as const,
   quotes: (hash: CastHash, viewerFid: Fid | null) =>
@@ -46,7 +59,13 @@ const queryKeys = {
 
   channel: (id: string) => [...root, 'channel', id.toLowerCase()] as const,
   channelFeed: (id: string, viewerFid: Fid | null) =>
-    [...root, 'channel', id.toLowerCase(), 'feed', viewerPart(viewerFid)] as const,
+    [
+      ...root,
+      'channel',
+      id.toLowerCase(),
+      'feed',
+      viewerPart(viewerFid),
+    ] as const,
   channelMembers: (id: string) =>
     [...root, 'channel', id.toLowerCase(), 'members'] as const,
   trendingChannels: () => [...root, 'channels', 'trending'] as const,

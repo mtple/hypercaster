@@ -22,7 +22,11 @@ type RequestOptions = {
 };
 
 type Transport = {
-  get: (path: string, query?: Query, options?: RequestOptions) => Promise<unknown>;
+  get: (
+    path: string,
+    query?: Query,
+    options?: RequestOptions,
+  ) => Promise<unknown>;
   postMessage: (
     path: WritePath,
     body: Uint8Array,
@@ -67,7 +71,11 @@ function assertReadPath(path: string): void {
   }
 }
 
-function buildUrl(base: string, path: string, query: Query | undefined): string {
+function buildUrl(
+  base: string,
+  path: string,
+  query: Query | undefined,
+): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null || value === '') {

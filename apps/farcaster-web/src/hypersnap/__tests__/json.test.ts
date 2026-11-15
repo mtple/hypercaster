@@ -8,9 +8,9 @@ describe('parseJsonLossless', () => {
 
   it('keeps an integer above 2^53 exact instead of rounding it', () => {
     // JSON.parse alone turns ...993 into ...992.
-    expect((JSON.parse('{"fid":9007199254740993}') as { fid: number }).fid).toBe(
-      9007199254740992,
-    );
+    expect(
+      (JSON.parse('{"fid":9007199254740993}') as { fid: number }).fid,
+    ).toBe(9007199254740992);
     expect(parseJsonLossless('{"fid":9007199254740993}')).toEqual({
       fid: '9007199254740993',
     });
@@ -23,10 +23,9 @@ describe('parseJsonLossless', () => {
   });
 
   it('handles the largest u64 and negative values', () => {
-    expect(parseJsonLossless('[18446744073709551615,-9007199254740993]')).toEqual([
-      '18446744073709551615',
-      '-9007199254740993',
-    ]);
+    expect(
+      parseJsonLossless('[18446744073709551615,-9007199254740993]'),
+    ).toEqual(['18446744073709551615', '-9007199254740993']);
   });
 
   it('does not touch digits inside strings, including escaped quotes', () => {
@@ -40,9 +39,9 @@ describe('parseJsonLossless', () => {
   });
 
   it('does not quote long floats or exponents', () => {
-    expect(quoteUnsafeIntegers('[12345678901234567.5,1234567890123456789e2]')).toBe(
-      '[12345678901234567.5,1234567890123456789e2]',
-    );
+    expect(
+      quoteUnsafeIntegers('[12345678901234567.5,1234567890123456789e2]'),
+    ).toBe('[12345678901234567.5,1234567890123456789e2]');
   });
 
   it('still throws on invalid JSON', () => {

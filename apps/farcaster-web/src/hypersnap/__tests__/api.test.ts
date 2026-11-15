@@ -39,7 +39,10 @@ describe('read API against the synthetic node', () => {
     for (const request of node.requests) {
       expect(request.method).toBe('GET');
       expect(new URL(request.url).origin).toBe('https://node.example');
-      expect(request.path.startsWith('/v2/farcaster/') || request.path.startsWith('/v1/')).toBe(true);
+      expect(
+        request.path.startsWith('/v2/farcaster/') ||
+          request.path.startsWith('/v1/'),
+      ).toBe(true);
     }
   });
 
@@ -73,28 +76,42 @@ describe('read API against the synthetic node', () => {
     const b = await node.api.getCast(`0x${bare.toUpperCase()}`);
     expect(a.hash).toBe(`0x${bare}`);
     expect(b.hash).toBe(a.hash);
-    expect(new URL(node.requests[1].url).searchParams.get('identifier')).toBe(bare);
+    expect(new URL(node.requests[1].url).searchParams.get('identifier')).toBe(
+      bare,
+    );
   });
 
   it('rejects a short hash locally instead of asking the node', async () => {
     const node = createFakeNode();
-    await expect(node.api.getCast('0x6be259d1')).rejects.toMatchObject({ kind: 'not_found' });
+    await expect(node.api.getCast('0x6be259d1')).rejects.toMatchObject({
+      kind: 'not_found',
+    });
     expect(node.requests).toHaveLength(0);
   });
 
   it('reports a missing cast, user and channel as not found', async () => {
     const { api } = createFakeNode();
-    await expect(api.getCast('0x' + '00'.repeat(20))).rejects.toMatchObject({ kind: 'not_found' });
-    await expect(api.getUserByUsername('nobody-here')).rejects.toMatchObject({ kind: 'not_found' });
-    await expect(api.getChannel('no-such-channel')).rejects.toMatchObject({ kind: 'not_found' });
+    await expect(api.getCast('0x' + '00'.repeat(20))).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await expect(api.getUserByUsername('nobody-here')).rejects.toMatchObject({
+      kind: 'not_found',
+    });
+    await expect(api.getChannel('no-such-channel')).rejects.toMatchObject({
+      kind: 'not_found',
+    });
     // The node answers 200 with a placeholder for an unknown FID.
-    await expect(api.getUserByFid('99999999999')).rejects.toMatchObject({ kind: 'not_found' });
+    await expect(api.getUserByFid('99999999999')).rejects.toMatchObject({
+      kind: 'not_found',
+    });
   });
 
   it('lowercases usernames because the node lookup is case-sensitive', async () => {
     const node = createFakeNode();
     expect((await node.api.getUserByUsername(' @ADA ')).fid).toBe('1001');
-    expect(new URL(node.requests[0].url).searchParams.get('username')).toBe('ada');
+    expect(new URL(node.requests[0].url).searchParams.get('username')).toBe(
+      'ada',
+    );
   });
 
   it('resolves numbers and !fid as FIDs and everything else as a username', async () => {
@@ -107,7 +124,9 @@ describe('read API against the synthetic node', () => {
   it('finds a cast from a share-link prefix by scanning the author', async () => {
     const { api, world } = createFakeNode();
     const full = `0x${world.casts.clip.hash}`;
-    expect((await api.findCastByHashPrefix('1001', full.slice(0, 10)))?.hash).toBe(full);
+    expect(
+      (await api.findCastByHashPrefix('1001', full.slice(0, 10)))?.hash,
+    ).toBe(full);
     expect(await api.findCastByHashPrefix('1001', '0xdeadbeef')).toBeNull();
     expect(await api.findCastByHashPrefix('1001', 'xyz')).toBeNull();
   });
@@ -116,10 +135,20 @@ describe('read API against the synthetic node', () => {
     const node = createFakeNode();
     node.setOverride((path) =>
       path === '/v2/farcaster/feed/user/casts'
-        ? { status: 200, body: { casts: [node.world.casts.gm], next: { cursor: String(Math.random()) } } }
+        ? {
+            status: 200,
+            body: {
+              casts: [node.world.casts.gm],
+              next: { cursor: String(Math.random()) },
+            },
+          }
         : null,
     );
-    expect(await node.api.findCastByHashPrefix('1001', '0xdeadbeef', { maxPages: 3 })).toBeNull();
+    expect(
+      await node.api.findCastByHashPrefix('1001', '0xdeadbeef', {
+        maxPages: 3,
+      }),
+    ).toBeNull();
     expect(node.requests).toHaveLength(3);
   });
 
@@ -136,12 +165,24 @@ describe('read API against the synthetic node', () => {
   it('asks for viewer context only when given a viewer', async () => {
     const node = createFakeNode();
     const anonymous = await node.api.getTrendingFeed({ limit: 10 });
-    const personal = await node.api.getTrendingFeed({ limit: 10, viewerFid: '1001' });
+    const personal = await node.api.getTrendingFeed({
+      limit: 10,
+      viewerFid: '1001',
+    });
 
-    expect(new URL(node.requests[0].url).searchParams.has('viewer_fid')).toBe(false);
-    expect(anonymous.items.every((cast) => cast.viewerContext === null)).toBe(true);
-    expect(new URL(node.requests[1].url).searchParams.get('viewer_fid')).toBe('1001');
-    expect(personal.items.find((cast) => cast.author.username === 'ben')?.viewerContext).toEqual({
+    expect(new URL(node.requests[0].url).searchParams.has('viewer_fid')).toBe(
+      false,
+    );
+    expect(anonymous.items.every((cast) => cast.viewerContext === null)).toBe(
+      true,
+    );
+    expect(new URL(node.requests[1].url).searchParams.get('viewer_fid')).toBe(
+      '1001',
+    );
+    expect(
+      personal.items.find((cast) => cast.author.username === 'ben')
+        ?.viewerContext,
+    ).toEqual({
       liked: true,
       recasted: false,
     });
@@ -149,18 +190,31 @@ describe('read API against the synthetic node', () => {
 
   it('surfaces a node failure as an error, never as an empty list', async () => {
     const node = createFakeNode();
-    await expect(node.api.searchCasts('__error__')).rejects.toMatchObject({ kind: 'server', status: 500 });
+    await expect(node.api.searchCasts('__error__')).rejects.toMatchObject({
+      kind: 'server',
+      status: 500,
+    });
 
     node.setOverride(() => 'network-error');
-    await expect(node.api.getTrendingFeed()).rejects.toMatchObject({ kind: 'network' });
+    await expect(node.api.getTrendingFeed()).rejects.toMatchObject({
+      kind: 'network',
+    });
 
     node.setOverride(() => ({ status: 200, body: { unexpected: true } }));
-    await expect(node.api.getTrendingFeed()).rejects.toMatchObject({ kind: 'malformed' });
+    await expect(node.api.getTrendingFeed()).rejects.toMatchObject({
+      kind: 'malformed',
+    });
   });
 
   it('returns an honest empty page for an FID with nothing', async () => {
     const { api } = createFakeNode();
-    expect(await api.getFollowingFeed('99999999999')).toEqual({ items: [], nextCursor: null });
-    expect(await api.getNotifications('99999999999')).toEqual({ items: [], nextCursor: null });
+    expect(await api.getFollowingFeed('99999999999')).toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(await api.getNotifications('99999999999')).toEqual({
+      items: [],
+      nextCursor: null,
+    });
   });
 });

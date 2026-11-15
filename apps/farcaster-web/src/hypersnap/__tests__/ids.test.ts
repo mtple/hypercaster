@@ -28,7 +28,21 @@ describe('parseFid', () => {
   });
 
   it('rejects zero, negatives, fractions, overflow and junk', () => {
-    for (const bad of [0, -1, 1.5, NaN, '0', '-3', '1.5', 'abc', '', '18446744073709551616', null, undefined, {}]) {
+    for (const bad of [
+      0,
+      -1,
+      1.5,
+      NaN,
+      '0',
+      '-3',
+      '1.5',
+      'abc',
+      '',
+      '18446744073709551616',
+      null,
+      undefined,
+      {},
+    ]) {
       expect(parseFid(bad)).toBeNull();
     }
   });

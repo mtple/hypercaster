@@ -22,8 +22,7 @@ type Capabilities = {
   canMarkNotificationsSeenRemotely: false;
 };
 
-const READ_ONLY_EXPLANATION =
-  'Read-only preview — posting will be added later';
+const READ_ONLY_EXPLANATION = 'Read-only preview — posting will be added later';
 const SIGN_IN_EXPLANATION = 'Sign in to do this';
 
 function getCapabilities(
