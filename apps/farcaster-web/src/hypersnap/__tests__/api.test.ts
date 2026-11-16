@@ -127,6 +127,11 @@ describe('read API against the synthetic node', () => {
     expect(
       (await api.findCastByHashPrefix('1001', full.slice(0, 10)))?.hash,
     ).toBe(full);
+    // A reply is found too, although the node lists replies separately.
+    const reply = `0x${world.casts.reply1a.hash}`;
+    expect(
+      (await api.findCastByHashPrefix('1001', reply.slice(0, 10)))?.hash,
+    ).toBe(reply);
     expect(await api.findCastByHashPrefix('1001', '0xdeadbeef')).toBeNull();
     expect(await api.findCastByHashPrefix('1001', 'xyz')).toBeNull();
   });
@@ -149,7 +154,13 @@ describe('read API against the synthetic node', () => {
         maxPages: 3,
       }),
     ).toBeNull();
-    expect(node.requests).toHaveLength(3);
+    // Three pages of casts, then the (short) list of replies.
+    expect(node.requests.map((request) => request.path)).toEqual([
+      '/v2/farcaster/feed/user/casts',
+      '/v2/farcaster/feed/user/casts',
+      '/v2/farcaster/feed/user/casts',
+      '/v2/farcaster/feed/user/replies_and_recasts',
+    ]);
   });
 
   it('hydrates liked casts from stubs in one bulk call and skips missing ones', async () => {

@@ -1,0 +1,48 @@
+Hypercast
+=========
+
+Hypercast is an independent social client powered by Hypersnap. It is not
+affiliated with or endorsed by the operators of the official Farcaster client.
+
+This product includes software from the Farcaster client snapshot
+(https://github.com/farcasterxyz/client), copyright (c) 2026 Neynar, Inc.,
+used under the MIT License. The full text is in the LICENSE file.
+
+The Hypercast name, symbol and wordmark are not part of that project.
+
+Third-party software included in the built application
+-------------------------------------------------------
+
+    Package                        Version   Licence
+    react                          19.0.0    MIT
+    react-dom                      19.0.0    MIT
+    scheduler                      0.25.0    MIT
+    react-router                   6.30.6    MIT
+    react-router-dom               6.30.6    MIT
+    @remix-run/router              1.23.4    MIT
+    @tanstack/react-query          5.59.11   MIT
+    @tanstack/query-core           5.59.10   MIT
+    classnames                     2.3.2     MIT
+    linkify-it                     5.0.2     MIT
+    uc.micro                       2.1.0     MIT
+    lodash                         4.18.1    MIT
+    lucide-react                   0.487.0   ISC
+    @primer/octicons-react         19.8.0    MIT
+    react-intersection-observer    9.5.2     MIT
+    react-remove-scroll-bar        2.3.8     MIT
+    react-style-singleton          2.2.3     MIT
+    get-nonce                      1.0.1     MIT
+
+Included only when the build has writes enabled:
+
+    @noble/hashes                  2.2.0     MIT
+
+Fonts
+-----
+
+The interface uses Inter, loaded at run time from Google Fonts. The letters
+of the Hypercast wordmark are outlines of Inter Bold. Inter is copyright
+2016 The Inter Project Authors and licensed under the SIL Open Font License,
+Version 1.1.
+
+See docs/ATTRIBUTION.md for more detail.

@@ -242,38 +242,42 @@ function createApi(transport: Transport) {
       if (normalized === null) {
         return null;
       }
-      let cursor: string | null = null;
-      const seenCursors = new Set<string>();
-      for (
-        let pageIndex = 0;
-        pageIndex < (params.maxPages ?? 3);
-        pageIndex += 1
-      ) {
-        const page: Page<Cast> = decodeCastsPage(
-          await get(
-            `${BASE}/feed/user/casts`,
-            {
-              fid: authorFid,
-              ...pageQuery({
-                limit: MAX_PAGE_SIZE,
-                cursor,
-                viewerFid: params.viewerFid,
-              }),
-            },
-            options,
-          ),
-        );
-        const match = page.items.find((cast) =>
-          cast.hash.startsWith(normalized),
-        );
-        if (match) {
-          return match;
+      // The node cannot look a cast up by a partial hash, so look through
+      // what the author has posted: top-level casts first, then replies.
+      for (const feed of ['casts', 'replies_and_recasts']) {
+        let cursor: string | null = null;
+        const seenCursors = new Set<string>();
+        for (
+          let pageIndex = 0;
+          pageIndex < (params.maxPages ?? 3);
+          pageIndex += 1
+        ) {
+          const page: Page<Cast> = decodeCastsPage(
+            await get(
+              `${BASE}/feed/user/${feed}`,
+              {
+                fid: authorFid,
+                ...pageQuery({
+                  limit: MAX_PAGE_SIZE,
+                  cursor,
+                  viewerFid: params.viewerFid,
+                }),
+              },
+              options,
+            ),
+          );
+          const match = page.items.find((cast) =>
+            cast.hash.startsWith(normalized),
+          );
+          if (match) {
+            return match;
+          }
+          if (page.nextCursor === null || seenCursors.has(page.nextCursor)) {
+            break;
+          }
+          seenCursors.add(page.nextCursor);
+          cursor = page.nextCursor;
         }
-        if (page.nextCursor === null || seenCursors.has(page.nextCursor)) {
-          return null;
-        }
-        seenCursors.add(page.nextCursor);
-        cursor = page.nextCursor;
       }
       return null;
     },

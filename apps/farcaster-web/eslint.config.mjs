@@ -143,6 +143,17 @@ export default [
     ignores: ['e2e/fixtures/**', 'e2e/.tmp/**', 'e2e/screenshots/**'],
   },
   {
+    // Plain scripts served as they are and run by the browser.
+    files: ['public/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        localStorage: 'readonly',
+        window: 'readonly',
+      },
+    },
+  },
+  {
     files: ['e2e/**/*.mjs', 'src/hypersnap/fixtures/**/*.mjs'],
     languageOptions: {
       globals: {
