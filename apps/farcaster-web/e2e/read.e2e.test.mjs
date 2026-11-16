@@ -245,6 +245,18 @@ describe('layout', () => {
         const { page, context, problems } = await openPage(browser, { ...size, storage: screen.storage });
         await page.goto(app(screen.path), { waitUntil: 'networkidle' });
         expect(await overflowX(page), `${screen.name} at ${size.width}`).toBeLessThanOrEqual(0);
+        // The sticky header, tabs included, ends before the first cast starts.
+        const overlap = await page.evaluate(() => {
+          const first = document.querySelector('main article');
+          // The phone header and the page header are both sticky bars.
+          const bars = [...document.querySelectorAll('main nav.sticky')];
+          if (bars.length === 0 || !first) {
+            return 0;
+          }
+          const bottoms = bars.flatMap((bar) => [bar, ...bar.querySelectorAll('a, button')]).map((element) => element.getBoundingClientRect().bottom);
+          return Math.max(...bottoms) - first.getBoundingClientRect().top;
+        });
+        expect(overlap, `${screen.name} at ${size.width}: header over content`).toBeLessThanOrEqual(1);
         expect(problems, `${screen.name} at ${size.width}`).toEqual([]);
         await page.screenshot({ path: path.join(shotsDir, `${screen.name}-${size.width}.png`) });
         await context.close();

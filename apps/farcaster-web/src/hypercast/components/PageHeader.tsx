@@ -54,7 +54,13 @@ const PageHeader: FC<PageHeaderProps> = memo(
       <nav
         className={cn(
           'sticky top-0 z-10 flex-col border-b-0 bg-app border-default',
-          typeof footer !== 'undefined' ? 'h-14 sm:h-28' : 'sm:border-b',
+          // Title row and tabs are each 56px. On a phone the title row is
+          // only there when the page asks for it.
+          typeof footer === 'undefined'
+            ? 'sm:border-b'
+            : visibleOnMobile
+              ? 'h-28'
+              : 'h-14 sm:h-28',
         )}
       >
         <div
