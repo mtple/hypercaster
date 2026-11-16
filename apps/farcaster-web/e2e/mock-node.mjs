@@ -64,14 +64,17 @@ const CORS = {
 export async function startMockNode(options = {}) {
   const host = options.host ?? '127.0.0.1';
   let world;
+  let baseUrl = '';
   /** @type {'ok' | 'down' | 'error' | 'rate-limited' | 'slow'} */
   let mode = 'ok';
   /** @type {{ method: string, path: string }[]} */
   const requests = [];
-  /** @type {{ path: string, bytes: Buffer }[]} */
+  /** @type {{ path: string, bytes: Uint8Array }[]} */
   const submissions = [];
-  /** Decides what a submitted message gets back. Tests replace it. */
-  let submitResponder = () => ({ status: 200, body: { hash: '0x00' } });
+  /** Paths the browser sent a CORS preflight for. */
+  const preflights = [];
+  /** Replaces the node's own answer to a submitted message. For tests. */
+  let submitResponder = null;
 
   const server = http.createServer((request, response) => {
     const url = new URL(request.url ?? '/', `http://${request.headers.host}`);
@@ -84,6 +87,7 @@ export async function startMockNode(options = {}) {
     };
 
     if (method === 'OPTIONS') {
+      preflights.push(url.pathname);
       response.writeHead(204, {
         ...CORS,
         'access-control-allow-methods': 'GET, POST, OPTIONS',
@@ -91,6 +95,29 @@ export async function startMockNode(options = {}) {
         'access-control-max-age': '86400',
       });
       response.end();
+      return;
+    }
+
+    // Test-only: start again from the original synthetic world.
+    if (url.pathname === '/__control/reset') {
+      world = createWorld({ mediaBase: `${baseUrl}/media`, now: Date.now() });
+      mode = 'ok';
+      requests.length = 0;
+      submissions.length = 0;
+      send(200, { reset: true });
+      return;
+    }
+
+    // Test-only: what has been submitted so far, as hex.
+    if (url.pathname === '/__control/submissions') {
+      send(200, submissions.map((submission) => Buffer.from(submission.bytes).toString('hex')), { 'content-type': 'application/json' });
+      return;
+    }
+
+    // Test-only: drop an account's signing keys, as a revocation elsewhere would.
+    if (url.pathname === '/__control/revoke') {
+      world.revokeSigners(url.searchParams.get('fid') ?? '');
+      send(200, { revoked: true });
       return;
     }
 
@@ -147,10 +174,18 @@ export async function startMockNode(options = {}) {
       const chunks = [];
       request.on('data', (chunk) => chunks.push(chunk));
       request.on('end', () => {
-        const bytes = Buffer.concat(chunks);
+        const bytes = new Uint8Array(Buffer.concat(chunks));
         submissions.push({ path: url.pathname, bytes });
-        const result = submitResponder({ path: url.pathname, bytes });
-        send(result.status, result.body, { 'content-type': 'application/json' });
+        // The world checks the hash and signatures as a node would, and
+        // applies the message unless it was only sent for validation.
+        Promise.resolve(
+          submitResponder
+            ? submitResponder({ path: url.pathname, bytes })
+            : world.submit(bytes, { validateOnly: url.pathname === '/v1/validateMessage' }),
+        ).then(
+          (result) => send(result.status, result.body, { 'content-type': 'application/json' }),
+          (error) => send(500, { details: String(error) }, { 'content-type': 'application/json' }),
+        );
       });
       return;
     }
@@ -181,13 +216,18 @@ export async function startMockNode(options = {}) {
   });
   const address = /** @type {import('node:net').AddressInfo} */ (server.address());
   const url = `http://${host}:${address.port}`;
+  baseUrl = url;
   world = createWorld({ mediaBase: `${url}/media`, now: Date.now() });
 
   return {
     url,
-    world,
+    /** The current world; replaced by a reset. */
+    get world() {
+      return world;
+    },
     requests,
     submissions,
+    preflights,
     setMode(next) {
       mode = next;
     },

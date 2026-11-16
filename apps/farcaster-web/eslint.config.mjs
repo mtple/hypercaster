@@ -139,16 +139,25 @@ export default [
     },
   },
   {
-    // Generated media used by the local mock node.
-    ignores: ['e2e/fixtures/**'],
+    // Generated media for the mock node, and end-to-end build output.
+    ignores: ['e2e/fixtures/**', 'e2e/.tmp/**', 'e2e/screenshots/**'],
   },
   {
     files: ['e2e/**/*.mjs', 'src/hypersnap/fixtures/**/*.mjs'],
     languageOptions: {
       globals: {
         Buffer: 'readonly',
+        // Browser globals, used inside functions handed to the test page.
+        document: 'readonly',
+        fetch: 'readonly',
+        indexedDB: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        window: 'readonly',
+        TextDecoder: 'readonly',
         TextEncoder: 'readonly',
         URL: 'readonly',
+        crypto: 'readonly',
         URLSearchParams: 'readonly',
         console: 'readonly',
         process: 'readonly',

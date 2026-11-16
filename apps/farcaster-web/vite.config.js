@@ -53,9 +53,13 @@ function contentSecurityPolicy(env, { forHeader }) {
 }
 
 function hypercastSecurity(env) {
+  let outDir = path.resolve(__dirname, 'dist');
   return {
     name: 'hypercast-security',
     apply: 'build',
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
     transformIndexHtml(html) {
       return {
         html,
@@ -74,7 +78,6 @@ function hypercastSecurity(env) {
     // Static hosts that read a `_headers` file (Cloudflare Pages, Netlify)
     // send the same policy, plus the directives a meta tag cannot carry.
     closeBundle() {
-      const outDir = path.resolve(__dirname, 'dist');
       if (!fs.existsSync(outDir)) {
         return;
       }

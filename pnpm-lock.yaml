@@ -877,6 +877,9 @@ importers:
       '@neynar/ui':
         specifier: ^1.2.2
         version: 1.2.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(date-fns@2.30.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(recharts@2.15.4(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(tailwindcss@4.2.3)
+      '@noble/hashes':
+        specifier: ^2.0.1
+        version: 2.2.0
       '@primer/octicons-react':
         specifier: 19.8.0
         version: 19.8.0(react@19.0.0)

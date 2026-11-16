@@ -1,4 +1,5 @@
 import cn from 'classnames';
+import { Trash2Icon } from 'lucide-react';
 import { FC, memo, ReactNode, useCallback, useEffect, useState } from 'react';
 
 import { formatCount } from '~/hypercast/format';
@@ -302,6 +303,14 @@ const CastActions: FC<CastActionsProps> = memo(
         onClick={() => toggleBookmark(cast.hash)}
       />
     );
+    const remove = capabilities.canDeleteOwnCast &&
+      cast.author.fid === writes.signedInFid && (
+        <CastAction
+          label="Delete cast"
+          icon={<Trash2Icon size={17} className="text-tertiary" aria-hidden />}
+          onClick={() => writes.deleteCast(cast)}
+        />
+      );
     const share = (
       <CastAction
         label={copied ? 'Link copied' : 'Copy link'}
@@ -319,6 +328,7 @@ const CastActions: FC<CastActionsProps> = memo(
           {like}
           {bookmark}
           {share}
+          {remove}
         </div>
       );
     }
@@ -332,6 +342,7 @@ const CastActions: FC<CastActionsProps> = memo(
           {like}
         </div>
         <div className="mr-[-8px] flex flex-row items-center gap-[8px]">
+          {remove}
           {bookmark}
           {share}
         </div>

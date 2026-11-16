@@ -22,6 +22,7 @@
     "@json-render/react": "^0.15.0",
     "@marsidev/react-turnstile": "^1.1.0",
     "@neynar/ui": "^1.2.2",
+    "@noble/hashes": "^2.0.1",
     "@primer/octicons-react": "19.8.0",
     "@privy-io/react-auth": "2.7.0-beta-20250319225027",
     "@radix-ui/react-dialog": "^1.1.1",

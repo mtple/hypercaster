@@ -1,7 +1,11 @@
 /**
  * Typed read API over a Hypersnap node. Every method is one or more GETs.
  */
-import { HypersnapError, isNotFound } from '~/hypersnap/errors';
+import {
+  HypersnapError,
+  isHypersnapError,
+  isNotFound,
+} from '~/hypersnap/errors';
 import type { RequestOptions, Transport } from '~/hypersnap/http';
 import {
   normalizeHash,
@@ -15,6 +19,8 @@ import {
   decodeChannelMembersPage,
   decodeChannelsPage,
   decodeConversation,
+  decodeCustodyFids,
+  decodeKeyNonce,
   decodeNodeInfo,
   decodeNotificationsPage,
   decodeReactionsPage,
@@ -556,6 +562,47 @@ function createApi(transport: Transport) {
 
     async getNodeInfo(options?: CallOptions): Promise<NodeInfo> {
       return decodeNodeInfo(await get('/v1/info', undefined, options));
+    },
+
+    // --- signing keys (used only by the write module) ---
+
+    /** Accounts whose custody address is `address`. */
+    async getCustodyFids(
+      address: string,
+      options?: CallOptions,
+    ): Promise<Fid[]> {
+      return decodeCustodyFids(
+        await get('/v1/fidByAddress', { address }, options),
+      );
+    },
+
+    /** The last key nonce the account has used; a new key needs a higher one. */
+    async getKeyNonce(fid: Fid, options?: CallOptions): Promise<number> {
+      return decodeKeyNonce(await get('/v1/signersByFid', { fid }, options));
+    },
+
+    /** Whether the node still accepts messages signed by this key. */
+    async isSignerActive(
+      fid: Fid,
+      publicKeyHex: string,
+      options?: CallOptions,
+    ): Promise<boolean> {
+      try {
+        await get(
+          '/v1/signer',
+          { fid, signer: `0x${publicKeyHex.replace(/^0x/, '')}` },
+          options,
+        );
+        return true;
+      } catch (error) {
+        if (
+          isHypersnapError(error) &&
+          (error.kind === 'bad_request' || error.kind === 'not_found')
+        ) {
+          return false;
+        }
+        throw error;
+      }
     },
 
     /** Resolves "@name", a numeric FID, or "!fid" to a user. */

@@ -2,9 +2,9 @@
  * The only module in Hypercast that calls fetch.
  *
  * Reads are GET requests to an allowlisted path prefix on the configured
- * node. The single write entry point, postMessage, exists only when the
- * build has writes enabled and can reach nothing but the node's message
- * submission routes.
+ * node. This file can only GET. Submitting signed messages lives in
+ * ~/hypersnap/writes/poster, which borrows the request machinery from here
+ * and which a read-only build never includes.
  */
 import type { HypersnapConfig } from '~/hypersnap/config';
 import { HypersnapError, isRetryableKind } from '~/hypersnap/errors';
@@ -27,11 +27,6 @@ type Transport = {
     query?: Query,
     options?: RequestOptions,
   ) => Promise<unknown>;
-  postMessage: (
-    path: WritePath,
-    body: Uint8Array,
-    options?: RequestOptions,
-  ) => Promise<unknown>;
 };
 
 type TransportDeps = {
@@ -40,13 +35,7 @@ type TransportDeps = {
   random?: () => number;
 };
 
-type WritePath = '/v1/submitMessage' | '/v1/validateMessage';
-
 const READ_PREFIXES = ['/v2/farcaster/', '/v1/'] as const;
-const WRITE_PATHS: readonly WritePath[] = [
-  '/v1/submitMessage',
-  '/v1/validateMessage',
-];
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
@@ -133,10 +122,8 @@ function errorForStatus(status: number, path: string, text: string) {
   );
 }
 
-function createTransport(
-  config: Pick<HypersnapConfig, 'nodeUrl' | 'writesEnabled'>,
-  deps: TransportDeps = {},
-): Transport {
+/** Timeouts, error mapping and retries, shared by reads and submissions. */
+function createRequester(deps: TransportDeps) {
   const doFetch = deps.fetch ?? ((...args) => globalThis.fetch(...args));
   const sleep = deps.sleep ?? defaultSleep;
   const random = deps.random ?? Math.random;
@@ -246,6 +233,15 @@ function createTransport(
     throw lastError;
   }
 
+  return { attempt, withRetries };
+}
+
+/** Read access to the node: GET requests to its API routes, nothing else. */
+function createTransport(
+  config: Pick<HypersnapConfig, 'nodeUrl'>,
+  deps: TransportDeps = {},
+): Transport {
+  const { attempt, withRetries } = createRequester(deps);
   return {
     get(path, query, options = {}) {
       assertReadPath(path);
@@ -262,44 +258,13 @@ function createTransport(
         options.signal,
       );
     },
-
-    postMessage(path, body, options = {}) {
-      if (!config.writesEnabled) {
-        throw new HypersnapError(
-          'blocked',
-          'This build is read-only; nothing can be submitted',
-          { path },
-        );
-      }
-      if (!WRITE_PATHS.includes(path)) {
-        throw new HypersnapError('blocked', `Refusing to post to "${path}"`, {
-          path,
-        });
-      }
-      const url = `${config.nodeUrl}${path}`;
-      // A signed message is identified by its hash, so resending the same
-      // bytes cannot apply it twice. Callers opt in to retries explicitly.
-      return withRetries(
-        () =>
-          attempt(
-            url,
-            path,
-            {
-              method: 'POST',
-              headers: {
-                accept: 'application/json',
-                'content-type': 'application/octet-stream',
-              },
-              body: body as BodyInit,
-            },
-            options,
-          ),
-        options.retries ?? 0,
-        options.signal,
-      );
-    },
   };
 }
 
-export { createTransport, DEFAULT_RETRIES, DEFAULT_TIMEOUT_MS };
-export type { Query, RequestOptions, Transport, TransportDeps, WritePath };
+export {
+  createRequester,
+  createTransport,
+  DEFAULT_RETRIES,
+  DEFAULT_TIMEOUT_MS,
+};
+export type { Query, RequestOptions, Transport, TransportDeps };

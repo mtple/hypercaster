@@ -21,3 +21,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# End-to-end test builds and screenshots
+e2e/.tmp
+e2e/screenshots

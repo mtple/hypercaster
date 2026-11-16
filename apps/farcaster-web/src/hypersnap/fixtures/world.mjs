@@ -13,7 +13,16 @@
  *   - cast search nests under `result`; channel members under `members`
  */
 
+import { checkMessage } from './protocol.mjs';
+
 const NOW = Date.parse('2026-11-15T18:00:00.000Z');
+const FARCASTER_EPOCH_SECONDS = 1_609_459_200;
+/**
+ * Custody address of the fixture account "ada": the first account of the
+ * public "test test ... junk" developer mnemonic, so tests can sign as it.
+ */
+const TEST_CUSTODY_ADDRESS = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
+const MESSAGE_TYPE_NUMBER = { castAdd: 1, castRemove: 2, reactionAdd: 3, reactionRemove: 4, linkAdd: 5, linkRemove: 6 };
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -44,9 +53,9 @@ export function createWorld(options = {}) {
   /** @type {Map<string, any>} */
   const users = new Map();
 
-  function addUser({ fid, username, displayName, bio = '', pfp = true, followers = 0, following = 0, registeredDaysAgo = 400 }) {
+  function addUser({ fid, username, displayName, bio = '', pfp = true, followers = 0, following = 0, registeredDaysAgo = 400, custody: custodyOverride }) {
     const key = String(fid);
-    const custody = `0x${key.padStart(40, 'a').slice(-40)}`;
+    const custody = custodyOverride ?? `0x${key.padStart(40, 'a').slice(-40)}`;
     const user = {
       object: 'user',
       fid,
@@ -67,7 +76,7 @@ export function createWorld(options = {}) {
     return user;
   }
 
-  const ada = addUser({ fid: 1001, username: 'ada', displayName: 'Ada Okafor', bio: 'Building small tools for big conversations. Maintainer of things nobody notices until they break.', followers: 37, following: 4 });
+  const ada = addUser({ fid: 1001, custody: TEST_CUSTODY_ADDRESS, username: 'ada', displayName: 'Ada Okafor', bio: 'Building small tools for big conversations. Maintainer of things nobody notices until they break.', followers: 37, following: 4 });
   const ben = addUser({ fid: 1002, username: 'ben', displayName: 'Ben Castillo', bio: 'Photographer. Mostly coastlines.', followers: 812, following: 190 });
   const chiyo = addUser({ fid: 1003, username: 'chiyo', displayName: '千代 Chiyo', bio: '写真と散歩。', followers: 2304, following: 77 });
   const devon = addUser({ fid: 1004, username: 'devon', displayName: 'Devon Reyes', bio: '', pfp: false, followers: 12, following: 40 });
@@ -436,6 +445,39 @@ export function createWorld(options = {}) {
           ],
         });
 
+      case '/v1/fidByAddress': {
+        const address = (query.get('address') ?? '').toLowerCase();
+        if (!/^0x[0-9a-f]{40}$/.test(address)) {
+          return json({ error: 'Bad Request', error_detail: 'invalid address' }, 400);
+        }
+        const matches = [...users.values()]
+          .filter((user) => user.custody_address === address)
+          .map((user) => ({ fid: user.fid, isCustody: true, isVerified: false }));
+        return json({ matches });
+      }
+
+      case '/v1/signersByFid': {
+        const error = requireFid();
+        if (error) {
+          return error;
+        }
+        return json({
+          signers: [...(signers.get(fid)?.keys() ?? [])].map((key) => ({ key: `0x${key}` })),
+          currentUserNonce: keyNonce.get(fid) ?? 0,
+        });
+      }
+
+      case '/v1/signer': {
+        const error = requireFid();
+        if (error) {
+          return error;
+        }
+        const key = (query.get('signer') ?? '').toLowerCase().replace(/^0x/, '');
+        return signers.get(fid)?.has(key)
+          ? json({ fid: users.get(fid)?.fid ?? fid, key: `0x${key}` })
+          : json({ error: 'Bad Request', error_detail: 'Active signer not found' }, 400);
+      }
+
       case '/v2/farcaster/feed/trending':
       case '/v2/farcaster/feed/for_you':
         return castPage(trendingOrder, query);
@@ -639,9 +681,163 @@ export function createWorld(options = {}) {
     }
   }
 
+  // --- submitted messages -------------------------------------------------
+
+  /** fid -> (public key hex -> { scopes }) */
+  const signers = new Map();
+  /** fid -> last key nonce used */
+  const keyNonce = new Map();
+
+  const refuse = (reason) => ({
+    status: 400,
+    body: { errCode: 'bad_request.validation_failure', presentable: false, name: 'HubError', code: 3, details: reason },
+  });
+  const without = (list, item) => list.filter((entry) => entry !== item);
+  const listIn = (map, key) => map.get(key) ?? [];
+
+  /**
+   * Checks a submitted message and, unless `validateOnly`, applies it.
+   * @param {Uint8Array} bytes
+   * @param {{ validateOnly?: boolean }} [options]
+   */
+  async function submit(bytes, { validateOnly = false } = {}) {
+    const checked = await checkMessage(bytes);
+    if (!checked.ok) {
+      return refuse(checked.reason);
+    }
+    const message = checked.message;
+    const { body, fid: sender } = message;
+    const user = users.get(sender);
+    if (!user) {
+      return refuse('unknown fid');
+    }
+    const accepted = { status: 200, body: { hash: `0x${message.hash}`, fid: user.fid } };
+
+    if (message.kind === 'keyAdd') {
+      if (message.custodyAddress !== user.custody_address.toLowerCase()) {
+        return refuse('custody signature does not match the custody address');
+      }
+      if (body.nonce <= (keyNonce.get(sender) ?? 0)) {
+        return refuse('nonce too low');
+      }
+      if (!validateOnly) {
+        signers.set(sender, new Map(signers.get(sender) ?? []).set(message.signerHex, { scopes: body.scopes }));
+        keyNonce.set(sender, body.nonce);
+      }
+      return accepted;
+    }
+
+    const key = signers.get(sender)?.get(message.signerHex);
+    if (!key) {
+      return refuse('invalid signer: signer is not active for this fid');
+    }
+    if (message.kind === 'keyRemove') {
+      if (!validateOnly) {
+        signers.get(sender).delete(message.signerHex);
+      }
+      return accepted;
+    }
+    if (!key.scopes.includes(MESSAGE_TYPE_NUMBER[message.kind])) {
+      return refuse('signer is not allowed to send this kind of message');
+    }
+    if (validateOnly) {
+      return accepted;
+    }
+
+    switch (message.kind) {
+      case 'castAdd': {
+        const parent = body.parent ? (casts.get(body.parent.hash) ?? null) : null;
+        const root = parent ? casts.get(parent.thread_hash ?? parent.hash) : null;
+        const rootUrl = body.parentUrl ?? root?.root_parent_url ?? null;
+        const cast = {
+          object: 'cast',
+          hash: message.hash,
+          ...(body.parent ? { parent_hash: body.parent.hash } : {}),
+          ...(body.parentUrl ? { parent_url: body.parentUrl } : {}),
+          ...(rootUrl ? { root_parent_url: rootUrl } : {}),
+          parent_author: { fid: body.parent ? (users.get(body.parent.fid)?.fid ?? Number(body.parent.fid)) : null },
+          author: user,
+          text: body.text,
+          timestamp: iso((message.timestamp + FARCASTER_EPOCH_SECONDS) * 1000),
+          embeds: body.embeds.map((embed) => (embed.url ? { url: embed.url } : { cast_id: { fid: Number(embed.cast.fid), hash: embed.cast.hash } })),
+          type: 'cast',
+          reactions: { likes_count: 0, recasts_count: 0, likes: [], recasts: [] },
+          replies: { count: 0 },
+          thread_hash: body.parent ? (parent?.thread_hash ?? body.parent.hash) : message.hash,
+          format_version: 0,
+          mentioned_profiles: body.mentions.map((mentioned) => users.get(mentioned) ?? stubUser(mentioned)),
+          mentioned_profiles_ranges: body.mentionsPositions.map((position) => ({ start: position, end: position })),
+          mentioned_channels: [],
+          mentioned_channels_ranges: [],
+        };
+        if (parent) {
+          parent.replies.count += 1;
+        } else {
+          trendingOrder.unshift(cast);
+        }
+        casts.set(cast.hash, cast);
+        break;
+      }
+      case 'castRemove': {
+        const cast = casts.get(body.targetHash);
+        if (cast && fidKey(cast.author) === sender) {
+          casts.delete(cast.hash);
+          const index = trendingOrder.indexOf(cast);
+          if (index >= 0) {
+            trendingOrder.splice(index, 1);
+          }
+          const parent = cast.parent_hash ? casts.get(cast.parent_hash) : null;
+          if (parent) {
+            parent.replies.count = Math.max(0, parent.replies.count - 1);
+          }
+        }
+        break;
+      }
+      case 'reactionAdd':
+      case 'reactionRemove': {
+        const cast = casts.get(body.target.hash);
+        const isLike = body.reaction === 1;
+        const mine = isLike ? likedBy : recastedBy;
+        const onCast = isLike ? likesOnCast : recastsOnCast;
+        const countKey = isLike ? 'likes_count' : 'recasts_count';
+        const had = listIn(mine, sender).includes(body.target.hash);
+        const wants = message.kind === 'reactionAdd';
+        if (cast && had !== wants) {
+          mine.set(sender, wants ? [...listIn(mine, sender), cast.hash] : without(listIn(mine, sender), cast.hash));
+          onCast.set(cast.hash, wants ? [user, ...listIn(onCast, cast.hash)] : without(listIn(onCast, cast.hash), user));
+          cast.reactions[countKey] = Math.max(0, cast.reactions[countKey] + (wants ? 1 : -1));
+        }
+        break;
+      }
+      case 'linkAdd':
+      case 'linkRemove': {
+        const target = users.get(body.targetFid);
+        const had = listIn(following, sender).includes(body.targetFid);
+        const wants = message.kind === 'linkAdd';
+        if (body.linkType === 'follow' && target && had !== wants) {
+          following.set(sender, wants ? [...listIn(following, sender), body.targetFid] : without(listIn(following, sender), body.targetFid));
+          followersOf.set(body.targetFid, wants ? [sender, ...listIn(followersOf, body.targetFid)] : without(listIn(followersOf, body.targetFid), sender));
+          user.following_count = Math.max(0, user.following_count + (wants ? 1 : -1));
+          target.follower_count = Math.max(0, target.follower_count + (wants ? 1 : -1));
+        }
+        break;
+      }
+      default:
+        return refuse('unsupported message type');
+    }
+    return accepted;
+  }
+
   return {
     now,
     handle,
+    submit,
+    /** Forgets an account's keys, as if they were revoked from elsewhere. */
+    revokeSigners: (fid) => {
+      signers.delete(String(fid));
+    },
+    /** Public keys (hex) currently registered for an account. */
+    signersOf: (fid) => [...(signers.get(String(fid))?.keys() ?? [])],
     hashOf,
     users: { ada, ben, chiyo, devon, esme, farid, gus, hana, nova, anon, fillers },
     casts: { launch, coast, walk, essay, quoting, nativeHello, noAvatar, clip, stream, anonCast, links, gm, unsafe, reply1, reply1a, reply1a1, reply2, reply3, orphan, fillerCasts },

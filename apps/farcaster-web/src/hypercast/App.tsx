@@ -11,6 +11,7 @@ import {
 
 import { GlobalKeyPressProvider } from '~/contexts/GlobalKeyPressProvider';
 import { ThemeProvider } from '~/contexts/ThemeProvider';
+import { RouteErrorBoundary } from '~/hypercast/components/RouteErrorBoundary';
 import { Shell } from '~/hypercast/layout/Shell';
 import { AboutPage } from '~/hypercast/pages/AboutPage';
 import { BookmarksPage } from '~/hypercast/pages/BookmarksPage';
@@ -41,11 +42,18 @@ const WriteProvider = WRITES_ENABLED
     )
   : null;
 
+/**
+ * With writes on, nothing is drawn until the write controller has loaded.
+ * Showing the interface first would put sign-out, like and follow controls
+ * on screen for a moment with nothing behind them.
+ */
 const Writes: FC<{ children: ReactNode }> = ({ children }) =>
   WriteProvider ? (
-    <Suspense fallback={children}>
-      <WriteProvider>{children}</WriteProvider>
-    </Suspense>
+    <RouteErrorBoundary resetKey="write-controller">
+      <Suspense fallback={null}>
+        <WriteProvider>{children}</WriteProvider>
+      </Suspense>
+    </RouteErrorBoundary>
   ) : (
     <>{children}</>
   );

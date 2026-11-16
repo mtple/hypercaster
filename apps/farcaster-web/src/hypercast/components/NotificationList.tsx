@@ -37,14 +37,9 @@ const Actors: FC<{ actors: User[]; predicate: string }> = memo(
     const [first, ...rest] = actors;
     return (
       <>
-        <div className="mb-1 flex flex-row">
-          {actors.slice(0, MAX_AVATARS).map((actor, index) => (
-            <Avatar
-              key={actor.fid}
-              user={actor}
-              size="sm"
-              className={cn(index > 0 && 'ml-1')}
-            />
+        <div className="mb-1 flex flex-row flex-wrap gap-1">
+          {actors.slice(0, MAX_AVATARS).map((actor) => (
+            <Avatar key={actor.fid} user={actor} size="sm" />
           ))}
         </div>
         <div className="flex flex-1 flex-row flex-wrap items-center gap-1">

@@ -13,6 +13,13 @@ export type World = {
     pathname: string,
     query: URLSearchParams,
   ) => { status: number; body: unknown; text?: string };
+  /** Checks a submitted message and, unless validateOnly, applies it. */
+  submit: (
+    bytes: Uint8Array,
+    options?: { validateOnly?: boolean },
+  ) => Promise<{ status: number; body: unknown }>;
+  signersOf: (fid: string | number) => string[];
+  revokeSigners: (fid: string | number) => void;
   hashOf: (n: number) => string;
   users: Record<
     'ada' | 'ben' | 'chiyo' | 'devon' | 'esme' | 'farid' | 'gus' | 'hana' | 'nova' | 'anon',

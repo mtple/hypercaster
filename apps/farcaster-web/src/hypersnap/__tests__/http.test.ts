@@ -1,5 +1,6 @@
 import { HypersnapError } from '~/hypersnap/errors';
 import { createTransport } from '~/hypersnap/http';
+import { createMessagePoster } from '~/hypersnap/writes/poster';
 
 type Call = { url: string; init: RequestInit };
 
@@ -22,14 +23,16 @@ function harness(
     return typeof next === 'function' ? next() : next;
   }) as typeof fetch;
 
-  const transport = createTransport(config, {
+  const deps = {
     fetch: fetchImpl,
-    sleep: async (ms) => {
+    sleep: async (ms: number) => {
       sleeps.push(ms);
     },
     random: () => 0.5,
-  });
-  return { transport, calls, sleeps };
+  };
+  const transport = createTransport(config, deps);
+  const poster = createMessagePoster(config, deps);
+  return { transport, poster, calls, sleeps };
 }
 
 const ok = (body: unknown) =>
@@ -227,7 +230,7 @@ describe('transport errors', () => {
       });
     const calls: string[] = [];
     const transport = createTransport(
-      { nodeUrl: 'https://node.example', writesEnabled: false },
+      { nodeUrl: 'https://node.example' },
       {
         fetch: ((input: RequestInfo | URL, init?: RequestInit) => {
           calls.push(String(input));
@@ -249,7 +252,7 @@ describe('transport errors', () => {
     const controller = new AbortController();
     const calls: string[] = [];
     const transport = createTransport(
-      { nodeUrl: 'https://node.example', writesEnabled: false },
+      { nodeUrl: 'https://node.example' },
       {
         fetch: ((input: RequestInfo | URL, init?: RequestInit) => {
           calls.push(String(input));
@@ -271,23 +274,23 @@ describe('transport errors', () => {
   });
 });
 
-describe('transport writes', () => {
+describe('message poster', () => {
   const bytes = new Uint8Array([1, 2, 3]);
 
   it('cannot post anything when writes are disabled', () => {
-    const { transport, calls } = harness([]);
-    expect(() =>
-      transport.postMessage('/v1/submitMessage', bytes),
-    ).toThrowError(expect.objectContaining({ kind: 'blocked' }));
+    const { poster, calls } = harness([]);
+    expect(() => poster.postMessage('/v1/submitMessage', bytes)).toThrowError(
+      expect.objectContaining({ kind: 'blocked' }),
+    );
     expect(calls).toHaveLength(0);
   });
 
   it('posts raw bytes only to the submission routes when enabled', async () => {
-    const { transport, calls } = harness([ok({ hash: '0xabc' })], {
+    const { poster, calls } = harness([ok({ hash: '0xabc' })], {
       nodeUrl: 'https://node.example',
       writesEnabled: true,
     });
-    await transport.postMessage('/v1/submitMessage', bytes);
+    await poster.postMessage('/v1/submitMessage', bytes);
     expect(calls[0].url).toBe('https://node.example/v1/submitMessage');
     expect(calls[0].init.method).toBe('POST');
     expect(calls[0].init.body).toBe(bytes);
@@ -301,20 +304,25 @@ describe('transport writes', () => {
       'https://elsewhere.example/v1/submitMessage',
     ]) {
       expect(() =>
-        transport.postMessage(path as '/v1/submitMessage', bytes),
+        poster.postMessage(path as '/v1/submitMessage', bytes),
       ).toThrowError(expect.objectContaining({ kind: 'blocked' }));
     }
     expect(calls).toHaveLength(1);
   });
 
   it('does not retry a write unless asked to', async () => {
-    const { transport, calls } = harness([status(503)], {
+    const { poster, calls } = harness([status(503)], {
       nodeUrl: 'https://node.example',
       writesEnabled: true,
     });
-    expect(
-      await kindOf(transport.postMessage('/v1/submitMessage', bytes)),
-    ).toBe('server');
+    expect(await kindOf(poster.postMessage('/v1/submitMessage', bytes))).toBe(
+      'server',
+    );
     expect(calls).toHaveLength(1);
+  });
+
+  it('is not part of the read transport, which can only GET', () => {
+    const { transport } = harness([]);
+    expect(Object.keys(transport)).toEqual(['get']);
   });
 });

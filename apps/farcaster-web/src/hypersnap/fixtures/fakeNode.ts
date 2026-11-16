@@ -5,8 +5,15 @@
 import { createApi } from '~/hypersnap/api';
 import { createWorld, type World } from '~/hypersnap/fixtures/world.mjs';
 import { createTransport } from '~/hypersnap/http';
+import { createMessagePoster } from '~/hypersnap/writes/poster';
 
 type RecordedRequest = { method: string; url: string; path: string };
+
+type Submission = {
+  path: string;
+  bytes: Uint8Array;
+  contentType: string | null;
+};
 
 type Override = (
   path: string,
@@ -20,6 +27,7 @@ function createFakeNode(
 ) {
   const world = options.world ?? createWorld();
   const requests: RecordedRequest[] = [];
+  const submissions: Submission[] = [];
   let override: Override | null = null;
 
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -33,7 +41,24 @@ function createFakeNode(
     if (overridden === 'network-error') {
       throw new TypeError('Failed to fetch');
     }
-    const result = overridden ?? world.handle(url.pathname, url.searchParams);
+    const isSubmission =
+      method === 'POST' &&
+      (url.pathname === '/v1/submitMessage' ||
+        url.pathname === '/v1/validateMessage');
+    if (isSubmission) {
+      submissions.push({
+        path: url.pathname,
+        bytes: new Uint8Array(init?.body as ArrayBuffer),
+        contentType: new Headers(init?.headers).get('content-type'),
+      });
+    }
+    const result: { status: number; body?: unknown; text?: string } =
+      overridden ??
+      (isSubmission
+        ? await world.submit(new Uint8Array(init?.body as ArrayBuffer), {
+            validateOnly: url.pathname === '/v1/validateMessage',
+          })
+        : world.handle(url.pathname, url.searchParams));
     const text = result.text ?? JSON.stringify(result.body);
     return new Response(text, {
       status: result.status,
@@ -41,16 +66,26 @@ function createFakeNode(
     });
   }) as typeof fetch;
 
-  const transport = createTransport(
-    { nodeUrl: NODE_URL, writesEnabled: options.writesEnabled ?? false },
-    { fetch: fetchImpl, sleep: async () => undefined, random: () => 0 },
-  );
+  const deps = {
+    fetch: fetchImpl,
+    sleep: async () => undefined,
+    random: () => 0,
+  };
+  const nodeConfig = {
+    nodeUrl: NODE_URL,
+    writesEnabled: options.writesEnabled ?? false,
+  };
+  const transport = createTransport(nodeConfig, deps);
 
   return {
     world,
     requests,
+    /** Every message the client tried to submit, accepted or not. */
+    submissions,
     fetch: fetchImpl,
     transport,
+    /** Refuses to submit unless created with writesEnabled. */
+    poster: createMessagePoster(nodeConfig, deps),
     api: createApi(transport),
     /** Replace responses until cleared; return null to fall through. */
     setOverride(next: Override | null) {
@@ -60,4 +95,4 @@ function createFakeNode(
 }
 
 export { createFakeNode, NODE_URL };
-export type { RecordedRequest };
+export type { RecordedRequest, Submission };

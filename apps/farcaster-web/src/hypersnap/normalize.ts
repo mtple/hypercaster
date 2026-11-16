@@ -20,6 +20,7 @@ import type {
   ChannelMember,
   ConversationNode,
   Embed,
+  Fid,
   MentionSpan,
   NodeInfo,
   NotificationItem,
@@ -585,6 +586,25 @@ function decodeReactionsPage(body: unknown): Page<Reaction> {
 
 // --- node -----------------------------------------------------------------
 
+/** Accounts whose custody address matched a /v1/fidByAddress lookup. */
+function decodeCustodyFids(body: unknown): Fid[] {
+  return compact(
+    asArray(asRecord(body).matches).map((entry) => {
+      const match = asRecord(entry);
+      return match.isCustody === true ? parseFid(match.fid) : null;
+    }),
+  );
+}
+
+/** The last key nonce an account has used, from /v1/signersByFid. */
+function decodeKeyNonce(body: unknown): number {
+  const raw = asRecord(body).currentUserNonce;
+  const value = typeof raw === 'string' ? Number(raw) : raw;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : 0;
+}
+
 function decodeNodeInfo(body: unknown): NodeInfo {
   const record = asRecord(body);
   const stats = asRecord(record.dbStats);
@@ -615,6 +635,8 @@ export {
   decodeChannelMembersPage,
   decodeChannelsPage,
   decodeConversation,
+  decodeCustodyFids,
+  decodeKeyNonce,
   decodeNextCursor,
   decodeNodeInfo,
   decodeNotificationsPage,
